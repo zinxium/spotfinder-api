@@ -1,3 +1,26 @@
+[0.9.0] - 2026-02-11
+Stockage Cloud
+
+Configuration Cloudinary comme alternative à S3
+- Ajout de cloudinary et django-cloudinary-storage
+- Configuration conditionnelle USE_CLOUDINARY
+- Variables CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, CLOUDINARY_API_SECRET
+- Stockage automatique avec optimisation d'images
+- CDN intégré et transformations d'images
+- Documentation CLOUDINARY_CONFIG.md créée
+- Variables ajoutées dans .env et .env.example
+
+[0.8.0] - 2026-02-11
+Base de données
+
+Migration vers PostgreSQL
+- Configuration PostgreSQL dans settings.py avec variables d'environnement
+- Variables DB_NAME, DB_USER, DB_PASSWORD, DB_HOST, DB_PORT
+- Ajout de psycopg2-binary dans requirements.txt
+- Mise à jour de .env.example avec variables PostgreSQL
+- Mise à jour de la documentation README et ENVIRONMENT_CONFIG.md
+- Prérequis PostgreSQL ajouté au README
+
 [0.7.0] - 2026-02-11
 Sécurité
 

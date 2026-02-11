@@ -71,11 +71,16 @@ INSTALLED_APPS = [
     'rest_framework',
     'rest_framework.authtoken',
     'drf_spectacular',
+    'cloudinary_storage',
+    'cloudinary',
+    'corsheaders',
     'places',
 ]
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',
+    'corsheaders.middleware.CorsMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -107,17 +112,21 @@ WSGI_APPLICATION = 'spotfinderapi.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/6.0/ref/settings/#databases
 
+# Configuration PostgreSQL
 DATABASES = {
     'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+        'ENGINE': 'django.db.backends.postgresql',
+        'NAME': config('DB_NAME', default='spotfinder_db'),
+        'USER': config('DB_USER', default='spotfinder_user'),
+        'PASSWORD': config('DB_PASSWORD', default='password'),
+        'HOST': config('DB_HOST', default='localhost'),
+        'PORT': config('DB_PORT', default='5432'),
     }
 }
 
-# Configuration de base de données via variable d'environnement (optionnel)
-# Pour PostgreSQL en production, utilisez DATABASE_URL
-# Exemple: DATABASE_URL=postgresql://user:password@localhost:5432/dbname
-# DATABASE_URL = config('DATABASE_URL', default=f'sqlite:///{BASE_DIR / "db.sqlite3"}')
+# Alternative : Configuration via DATABASE_URL (recommandé pour production)
+# DATABASE_URL = config('DATABASE_URL', default='postgresql://user:password@localhost:5432/dbname')
+# Utilisez dj-database-url pour parser DATABASE_URL si nécessaire
 
 
 # Password validation
@@ -142,9 +151,9 @@ AUTH_PASSWORD_VALIDATORS = [
 # Internationalization
 # https://docs.djangoproject.com/en/6.0/topics/i18n/
 
-LANGUAGE_CODE = 'en-us'
+LANGUAGE_CODE = config('LANGUAGE_CODE', default='en-us')
 
-TIME_ZONE = 'UTC'
+TIME_ZONE = config('TIME_ZONE', default='UTC')
 
 USE_I18N = True
 
@@ -154,11 +163,25 @@ USE_TZ = True
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/6.0/howto/static-files/
 
-STATIC_URL = 'static/'
+STATIC_URL = config('STATIC_URL', default='static/')
+STATIC_ROOT = config('STATIC_ROOT', default=BASE_DIR / 'staticfiles')
 
 # Media files configuration
-MEDIA_URL = config('MEDIA_URL', default='media/')
-MEDIA_ROOT = config('MEDIA_ROOT', default=BASE_DIR / 'media')
+if config('USE_CLOUDINARY', default=False, cast=bool):
+    # Configuration Cloudinary pour le stockage en production
+    import cloudinary_storage
+    CLOUDINARY_STORAGE = {
+        'CLOUD_NAME': config('CLOUDINARY_CLOUD_NAME'),
+        'API_KEY': config('CLOUDINARY_API_KEY'),
+        'API_SECRET': config('CLOUDINARY_API_SECRET'),
+    }
+    CLOUDINARY_URL = config('CLOUDINARY_URL')
+    DEFAULT_FILE_STORAGE = 'cloudinary_storage.storage.MediaCloudinaryStorage'
+    MEDIA_URL = config('MEDIA_URL', default='https://res.cloudinary.com/')
+else:
+    # Stockage local pour le développement
+    MEDIA_URL = config('MEDIA_URL', default='media/')
+    MEDIA_ROOT = config('MEDIA_ROOT', default=BASE_DIR / 'media')
 
 # REST Framework Configuration
 REST_FRAMEWORK = {
@@ -173,15 +196,54 @@ REST_FRAMEWORK = {
 
 # Swagger/OpenAPI Configuration
 SPECTACULAR_SETTINGS = {
-    'TITLE': 'SpotFinder API',
-    'DESCRIPTION': 'API REST pour SpotFinder - Trouvez et partagez vos lieux préférés',
-    'VERSION': '1.0.0',
+    'TITLE': config('API_TITLE', default='SpotFinder API'),
+    'DESCRIPTION': config('API_DESCRIPTION', default='API REST pour SpotFinder - Trouvez et partagez vos lieux préférés'),
+    'VERSION': config('API_VERSION', default='1.0.0'),
     'SERVE_PERMISSIONS': ['rest_framework.permissions.AllowAny'],
     'CONTACT': {
-        'name': 'SpotFinder Support',
-        'email': 'support@spotfinder.com',
+        'name': config('API_CONTACT_NAME', default='SpotFinder Support'),
+        'email': config('API_CONTACT_EMAIL', default='support@spotfinder.com'),
     },
     'LICENSE': {
-        'name': 'MIT License',
+        'name': config('API_LICENSE_NAME', default='MIT License'),
     },
 }
+
+# ============================================
+# CORS - Cross-Origin Resource Sharing
+# ============================================
+CORS_ALLOWED_ORIGINS = config(
+    'CORS_ALLOWED_ORIGINS',
+    default='http://localhost:3000,http://localhost:8000',
+    cast=lambda x: [origin.strip() for origin in x.split(',')]
+)
+
+CORS_ALLOW_CREDENTIALS = config('CORS_ALLOW_CREDENTIALS', default=True, cast=bool)
+
+# ============================================
+# SÉCURITÉ - PRODUCTION
+# ============================================
+
+# En production (DEBUG=False), appliquer les paramètres de sécurité stricts
+if not DEBUG:
+    # HTTPS
+    SECURE_SSL_REDIRECT = config('SECURE_SSL_REDIRECT', default=True, cast=bool)
+    SESSION_COOKIE_SECURE = config('SESSION_COOKIE_SECURE', default=True, cast=bool)
+    CSRF_COOKIE_SECURE = config('CSRF_COOKIE_SECURE', default=True, cast=bool)
+    
+    # HSTS
+    SECURE_HSTS_SECONDS = config('SECURE_HSTS_SECONDS', default=31536000, cast=int)
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = config('SECURE_HSTS_INCLUDE_SUBDOMAINS', default=True, cast=bool)
+    SECURE_HSTS_PRELOAD = config('SECURE_HSTS_PRELOAD', default=True, cast=bool)
+    
+    # Headers de sécurité
+    SECURE_REFERRER_POLICY = config('SECURE_REFERRER_POLICY', default='strict-origin-when-cross-origin')
+    X_FRAME_OPTIONS = config('X_FRAME_OPTIONS', default='DENY')
+
+# ============================================
+# WHITENOISE - Serveur fichiers statiques
+# ============================================
+STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
+
+# Optimisation Whitenoise
+WHITENOISE_AUTOREFRESH = config('WHITENOISE_AUTOREFRESH', default=DEBUG, cast=bool)

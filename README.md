@@ -20,6 +20,7 @@ Installation
 Prérequis
 
 - Python 3.8+
+- PostgreSQL 12+
 - Git
 
 Étapes d'installation
@@ -78,7 +79,15 @@ Le projet utilise python-decouple pour gérer les variables d'environnement. Les
 - DEBUG : Mode développement (True/False)
 - SECRET_KEY : Clé secrète Django (obligatoire en production)
 - ALLOWED_HOSTS : Hôtes autorisés (obligatoire en production)
-- DATABASE_URL : URL de la base de données (optionnel, défaut SQLite)
+- DB_NAME : Nom de la base de données PostgreSQL
+- DB_USER : Utilisateur PostgreSQL
+- DB_PASSWORD : Mot de passe PostgreSQL
+- DB_HOST : Hôte PostgreSQL (défaut: localhost)
+- DB_PORT : Port PostgreSQL (défaut: 5432)
+- USE_CLOUDINARY : Utiliser Cloudinary pour le stockage (True/False)
+- CLOUDINARY_CLOUD_NAME : Nom du cloud Cloudinary
+- CLOUDINARY_API_KEY : Clé API Cloudinary
+- CLOUDINARY_API_SECRET : Secret API Cloudinary
 
 Voir le fichier ENVIRONMENT_CONFIG.md pour plus de détails.
 
