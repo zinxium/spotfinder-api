@@ -1,68 +1,127 @@
 SpotFinder API
 
-SpotFinder est une API REST pour gérer des lieux (places) avec leurs informations, images et budgets. Elle est développée en Django 6.0.2 avec Django REST Framework.
+SpotFinder est une API REST complète pour la découverte et la gestion de lieux. Développée avec Django 6.0.2 et Django REST Framework, elle offre des fonctionnalités avancées d'authentification, de gestion d'images, d'avis, de favoris et d'historique des visites.
+
+Fonctionnalités
+
+- Gestion complète des lieux (CRUD) avec informations détaillées
+- Système d'authentification basé sur les tokens
+- Upload et gestion des images pour les lieux
+- Système d'avis et de notation des lieux
+- Gestion des favoris utilisateur
+- Historique des visites des lieux
+- Documentation API interactive avec Swagger/OpenAPI
+- Pagination et filtrage avancés
+- Interface d'administration Django
+- Configuration sécurisée des variables d'environnement
 
 Installation
 
-Cloner le dépôt :
+Prérequis
 
-git clone <URL_DU_DEPOT>
-cd spotfinderapi
+- Python 3.8+
+- Git
 
+Étapes d'installation
 
-Créer et activer l’environnement virtuel :
+1. Cloner le dépôt :
 
-python -m venv venv
-# Windows
-venv\Scripts\activate
-# Linux / Mac
-source venv/bin/activate
+   ```bash
+   git clone git@github-personal:zinxium/spotfinder-api.git
+   cd spotfinder-api
+   ```
 
+2. Créer et activer l'environnement virtuel :
 
-Installer les dépendances :
+   ```bash
+   python -m venv venv
+   # Windows
+   venv\Scripts\activate
+   # Linux/Mac
+   source venv/bin/activate
+   ```
 
-pip install -r requirements.txt
+3. Installer les dépendances :
 
+   ```bash
+   pip install -r requirements.txt
+   ```
 
-Appliquer les migrations :
+4. Configurer les variables d'environnement :
 
-python manage.py migrate
+   Copier le fichier .env.example vers .env et le modifier selon vos besoins.
 
+5. Appliquer les migrations :
 
-Créer un superutilisateur (pour l’admin Django) :
+   ```bash
+   python manage.py migrate
+   ```
 
-python manage.py createsuperuser
+6. Créer un superutilisateur (optionnel, pour l'admin) :
 
+   ```bash
+   python manage.py createsuperuser
+   ```
 
-Lancer le serveur :
+7. Lancer le serveur :
 
-python manage.py runserver
+   ```bash
+   python manage.py runserver
+   ```
 
-Routes existantes
+Configuration
 
-L’API expose actuellement les routes suivantes via un DRF DefaultRouter :
+Variables d'environnement
 
-Méthode	URL	Action
-GET	/api/places/	Liste tous les lieux
-POST	/api/places/	Crée un nouveau lieu
-GET	/api/places/<id>/	Récupère un lieu par son id
-PUT	/api/places/<id>/	Remplace toutes les informations d’un lieu
-PATCH	/api/places/<id>/	Modifie partiellement un lieu
-DELETE	/api/places/<id>/	Supprime un lieu
-Routes restantes à implémenter
+Le projet utilise python-decouple pour gérer les variables d'environnement. Les variables importantes incluent :
 
-Filtrage par budget ou autres critères (/api/places/?min_budget=...&max_budget=...)
+- DEBUG : Mode développement (True/False)
+- SECRET_KEY : Clé secrète Django (obligatoire en production)
+- ALLOWED_HOSTS : Hôtes autorisés (obligatoire en production)
+- DATABASE_URL : URL de la base de données (optionnel, défaut SQLite)
 
-Authentification et autorisation (JWT ou session-based)
+Voir le fichier ENVIRONMENT_CONFIG.md pour plus de détails.
 
-Pagination pour les listes de lieux
+Utilisation
 
-Upload et gestion des images via API
+API Endpoints
 
-Endpoints pour d’autres entités si nécessaires (par exemple categories, reviews, etc.)
+L'API expose les endpoints suivants :
+
+- /api/places/ : Gestion des lieux
+- /api/categories/ : Gestion des catégories
+- /api/reviews/ : Gestion des avis
+- /api/favorites/ : Gestion des favoris
+- /api/visits/ : Historique des visites
+
+Documentation API
+
+La documentation interactive est disponible via Swagger à l'adresse /api/docs/ une fois le serveur lancé.
+
+Tests
+
+Pour exécuter les tests :
+
+```bash
+python manage.py test
+```
 
 Administration
 
-L’interface d’admin est accessible via /admin/
+L'interface d'administration Django est accessible via /admin/ après avoir créé un superutilisateur.
 
-Permet de créer, modifier et supprimer des lieux manuellement.
+Sécurité
+
+Le projet implémente une approche "fail-fast" pour les variables d'environnement sensibles. En production, SECRET_KEY et ALLOWED_HOSTS sont obligatoires et ne peuvent pas utiliser de valeurs par défaut.
+
+Contribuer
+
+1. Forker le projet
+2. Créer une branche pour votre fonctionnalité
+3. Commiter vos changements
+4. Pousser vers la branche
+5. Ouvrir une Pull Request
+
+Licence
+
+Ce projet est sous licence MIT. Voir le fichier LICENSE pour plus de détails.

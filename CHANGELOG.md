@@ -1,3 +1,28 @@
+[0.7.0] - 2026-02-11
+Sécurité
+
+Stratégie fail-fast pour les variables d'environnement critiques
+- SECRET_KEY et ALLOWED_HOSTS obligatoires en production (DEBUG=False)
+- Exception ImproperlyConfigured si variables manquantes en prod
+- Validation ALLOWED_HOSTS non vide en production
+- Fonction get_secret() pour gérer les variables obligatoires
+- Développement préserve les valeurs par défaut sûres
+- Production impose la configuration explicite
+- Documentation mise à jour avec stratégie fail-fast
+
+[0.6.0] - 2026-02-11
+Sécurité
+
+Renforcement de la sécurité avec variables d'environnement
+- Installation de python-decouple pour la gestion des secrets
+- Déplacement de SECRET_KEY, DEBUG, ALLOWED_HOSTS vers .env
+- Création de .env avec valeurs de développement sûres
+- Création de .env.example comme template pour l'équipe
+- Configuration ALLOWED_HOSTS avec valeurs par défaut sécurisées
+- Variables MEDIA_URL/MEDIA_ROOT configurables
+- Documentation complète dans ENVIRONMENT_CONFIG.md
+- .env exclu du versioning Git (.gitignore déjà configuré)
+
 [0.5.0] - 2026-02-11
 Ajouté
 

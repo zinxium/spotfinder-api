@@ -11,21 +11,52 @@ https://docs.djangoproject.com/en/6.0/ref/settings/
 """
 
 from pathlib import Path
+from decouple import config, Csv
+from django.core.exceptions import ImproperlyConfigured
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 
-# Quick-start development settings - unsuitable for production
-# See https://docs.djangoproject.com/en/6.0/howto/deployment/checklist/
+# ============================================
+# SÉCURITÉ - Variables d'environnement OBLIGATOIRES
+# ============================================
+
+def get_secret(key, default=None):
+    """
+    Récupère une variable d'environnement obligatoire.
+    En développement : utilise la valeur par défaut si fournie.
+    En production : lève une exception si non définie.
+    """
+    value = config(key, default=default)
+    
+    # En production (DEBUG=False), aucune valeur par défaut n'est acceptée
+    if not config('DEBUG', default=False, cast=bool):
+        if value == default or value is None:
+            raise ImproperlyConfigured(
+                f'La variable d\'environnement {key} est obligatoire en production. '
+                f'Définissez-la dans votre environnement ou fichier .env'
+            )
+    
+    return value
+
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-63#$$m)&)0%(km%(2(jc1k0wz1sfn*nr&j9)ss$4u1&i0#y%()'
+SECRET_KEY = get_secret('SECRET_KEY', default='django-insecure-dev-key-change-in-production-123456789')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = config('DEBUG', default=False, cast=bool)
 
-ALLOWED_HOSTS = []
+# Liste des hôtes autorisés - OBLIGATOIRE en production
+ALLOWED_HOSTS = get_secret('ALLOWED_HOSTS', default='localhost,127.0.0.1')
+ALLOWED_HOSTS = [host.strip() for host in ALLOWED_HOSTS.split(',') if host.strip()]
+
+# Validation supplémentaire pour ALLOWED_HOSTS en production
+if not DEBUG and not ALLOWED_HOSTS:
+    raise ImproperlyConfigured(
+        'ALLOWED_HOSTS ne peut pas être vide en production. '
+        'Définissez la variable d\'environnement ALLOWED_HOSTS'
+    )
 
 
 # Application definition
@@ -83,6 +114,11 @@ DATABASES = {
     }
 }
 
+# Configuration de base de données via variable d'environnement (optionnel)
+# Pour PostgreSQL en production, utilisez DATABASE_URL
+# Exemple: DATABASE_URL=postgresql://user:password@localhost:5432/dbname
+# DATABASE_URL = config('DATABASE_URL', default=f'sqlite:///{BASE_DIR / "db.sqlite3"}')
+
 
 # Password validation
 # https://docs.djangoproject.com/en/6.0/ref/settings/#auth-password-validators
@@ -121,8 +157,8 @@ USE_TZ = True
 STATIC_URL = 'static/'
 
 # Media files configuration
-MEDIA_URL = 'media/'
-MEDIA_ROOT = BASE_DIR / 'media'
+MEDIA_URL = config('MEDIA_URL', default='media/')
+MEDIA_ROOT = config('MEDIA_ROOT', default=BASE_DIR / 'media')
 
 # REST Framework Configuration
 REST_FRAMEWORK = {
