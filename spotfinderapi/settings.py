@@ -246,3 +246,13 @@ STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 
 # Optimisation Whitenoise
 WHITENOISE_AUTOREFRESH = config('WHITENOISE_AUTOREFRESH', default=DEBUG, cast=bool)
+
+# ============================================
+# DRF-SPECTACULAR - Documentation Swagger
+# ============================================
+SPECTACULAR_SETTINGS = {
+    'TITLE': 'Spotfinder API',
+    'DESCRIPTION': 'API REST pour découvrir et gérer des lieux',
+    'VERSION': '1.0.0',
+    'SERVE_INCLUDE_SCHEMA': False,
+}

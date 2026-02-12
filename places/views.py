@@ -8,6 +8,7 @@ from rest_framework.permissions import IsAuthenticated, AllowAny, IsAuthenticate
 from rest_framework.pagination import PageNumberPagination
 from django.contrib.auth.models import User
 from django.db.models import Q, Avg
+from drf_spectacular.utils import extend_schema_view, extend_schema
 from .models import Place, Review, Favorite, Category, Visit
 from .serializers import PlaceSerializer, ReviewSerializer, FavoriteSerializer, UserSerializer, CategorySerializer, VisitSerializer
 
@@ -33,6 +34,14 @@ class StandardResultsSetPagination(PageNumberPagination):
 # ============================================
 # VIEWSET: Category
 # ============================================
+@extend_schema_view(
+    list=extend_schema(tags=["Categories"]),
+    retrieve=extend_schema(tags=["Categories"]),
+    create=extend_schema(tags=["Categories"]),
+    update=extend_schema(tags=["Categories"]),
+    partial_update=extend_schema(tags=["Categories"]),
+    destroy=extend_schema(tags=["Categories"]),
+)
 class CategoryViewSet(viewsets.ModelViewSet):
     """
     ViewSet pour gérer les catégories.
@@ -54,6 +63,14 @@ class CategoryViewSet(viewsets.ModelViewSet):
 # ============================================
 # VIEWSET: Review
 # ============================================
+@extend_schema_view(
+    list=extend_schema(tags=["Reviews"]),
+    retrieve=extend_schema(tags=["Reviews"]),
+    create=extend_schema(tags=["Reviews"]),
+    update=extend_schema(tags=["Reviews"]),
+    partial_update=extend_schema(tags=["Reviews"]),
+    destroy=extend_schema(tags=["Reviews"]),
+)
 class ReviewViewSet(viewsets.ModelViewSet):
     """
     ViewSet pour gérer les avis.
@@ -90,6 +107,13 @@ class ReviewViewSet(viewsets.ModelViewSet):
 # ============================================
 # VIEWSET: Favorite
 # ============================================
+@extend_schema_view(
+    list=extend_schema(tags=["Favorites"]),
+    retrieve=extend_schema(tags=["Favorites"]),
+    create=extend_schema(tags=["Favorites"]),
+    destroy=extend_schema(tags=["Favorites"]),
+    toggle=extend_schema(tags=["Favorites"]),
+)
 class FavoriteViewSet(viewsets.ModelViewSet):
     """
     ViewSet pour gérer les favoris.
@@ -143,6 +167,11 @@ class FavoriteViewSet(viewsets.ModelViewSet):
 # ============================================
 # VIEWSET: User
 # ============================================
+@extend_schema_view(
+    list=extend_schema(tags=["Users"]),
+    retrieve=extend_schema(tags=["Users"]),
+    places=extend_schema(tags=["Users"]),
+)
 class UserViewSet(viewsets.ModelViewSet):
     """
     ViewSet pour gérer les utilisateurs.
@@ -188,6 +217,19 @@ class UserViewSet(viewsets.ModelViewSet):
 # ============================================
 # VIEWSET: Place (Principal)
 # ============================================
+@extend_schema_view(
+    list=extend_schema(tags=["Places"]),
+    retrieve=extend_schema(tags=["Places"]),
+    create=extend_schema(tags=["Places"]),
+    update=extend_schema(tags=["Places"]),
+    partial_update=extend_schema(tags=["Places"]),
+    destroy=extend_schema(tags=["Places"]),
+    book=extend_schema(tags=["Places"]),
+    add_review=extend_schema(tags=["Places"]),
+    reviews=extend_schema(tags=["Places"]),
+    favorite=extend_schema(tags=["Places"]),
+    search=extend_schema(tags=["Places"]),
+)
 class PlaceViewSet(viewsets.ModelViewSet):
     """
     ViewSet principal pour gérer les places.
@@ -378,6 +420,7 @@ class PlaceViewSet(viewsets.ModelViewSet):
 # ============================================
 # VUE: Register (Créer un compte)
 # ============================================
+@extend_schema(tags=["Authentication"])
 @api_view(['POST'])
 def register(request):
     """
@@ -439,6 +482,7 @@ def register(request):
 # ============================================
 # VUE: Login (Connexion)
 # ============================================
+@extend_schema(tags=["Authentication"])
 @api_view(['POST'])
 def login(request):
     """
@@ -499,6 +543,7 @@ def login(request):
 # ============================================
 # VUE: Logout (Déconnexion)
 # ============================================
+@extend_schema(tags=["Authentication"])
 @api_view(['POST'])
 def logout(request):
     """
@@ -532,6 +577,12 @@ def logout(request):
 # ============================================
 # VIEWSET: Visit (Historique des visites)
 # ============================================
+@extend_schema_view(
+    list=extend_schema(tags=["Visits"]),
+    retrieve=extend_schema(tags=["Visits"]),
+    create=extend_schema(tags=["Visits"]),
+    destroy=extend_schema(tags=["Visits"]),
+)
 class VisitViewSet(viewsets.ModelViewSet):
     """
     ViewSet pour gérer l'historique des visites.
