@@ -1,3 +1,27 @@
+[1.0.0] - 2026-02-12
+Documentation API & Swagger
+
+Structuration complète de la documentation Swagger
+- Ajout de tags drf-spectacular pour tous les ViewSets (Places, Reviews, Favorites, Users, Categories, Visits)
+- Tagging des endpoints d'authentification (register, login, logout)
+- Création de serializers typés pour l'authentification (RegisterSerializer, LoginSerializer, LogoutSerializer)
+- Type hints ajoutés aux méthodes de serializers (get_image, get_reviews_count, etc.)
+- Configuration SPECTACULAR_SETTINGS dans settings.py avec titre et description
+- Routes racine et d'authentification documentées dans Swagger
+- Tous les endpoints CRUD correctement catégorisés (create, update, partial_update, destroy)
+- Documentation Swagger professionnelle sur `/api/docs/`
+
+Configuration ALLOWED_HOSTS depuis .env
+- ALLOWED_HOSTS maintenant configuré depuis la variable d'environnement
+- Défaut à "*" pour le développement
+- Conversion automatique en liste depuis le .env
+- Validation correcte pour Django
+
+Route racine d'accueil
+- Ajout d'une vue racine GET / qui retourne un message de bienvenue
+- Lien vers la documentation `/api/docs/`
+- Évite les erreurs 404 sur la racine
+
 [0.9.0] - 2026-02-11
 Stockage Cloud
 
