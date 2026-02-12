@@ -48,15 +48,7 @@ SECRET_KEY = get_secret('SECRET_KEY', default='django-insecure-dev-key-change-in
 DEBUG = config('DEBUG', default=False, cast=bool)
 
 # Liste des hôtes autorisés - OBLIGATOIRE en production
-ALLOWED_HOSTS = get_secret('ALLOWED_HOSTS', default='localhost,127.0.0.1')
-ALLOWED_HOSTS = [host.strip() for host in ALLOWED_HOSTS.split(',') if host.strip()]
-
-# Validation supplémentaire pour ALLOWED_HOSTS en production
-if not DEBUG and not ALLOWED_HOSTS:
-    raise ImproperlyConfigured(
-        'ALLOWED_HOSTS ne peut pas être vide en production. '
-        'Définissez la variable d\'environnement ALLOWED_HOSTS'
-    )
+ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='*', cast=Csv)
 
 
 # Application definition
