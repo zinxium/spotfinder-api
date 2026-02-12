@@ -10,7 +10,7 @@ from django.contrib.auth.models import User
 from django.db.models import Q, Avg
 from drf_spectacular.utils import extend_schema_view, extend_schema
 from .models import Place, Review, Favorite, Category, Visit
-from .serializers import PlaceSerializer, ReviewSerializer, FavoriteSerializer, UserSerializer, CategorySerializer, VisitSerializer
+from .serializers import PlaceSerializer, ReviewSerializer, FavoriteSerializer, UserSerializer, CategorySerializer, VisitSerializer, RegisterSerializer, LoginSerializer, LogoutSerializer
 
 
 # ============================================
@@ -111,6 +111,8 @@ class ReviewViewSet(viewsets.ModelViewSet):
     list=extend_schema(tags=["Favorites"]),
     retrieve=extend_schema(tags=["Favorites"]),
     create=extend_schema(tags=["Favorites"]),
+    update=extend_schema(tags=["Favorites"]),
+    partial_update=extend_schema(tags=["Favorites"]),
     destroy=extend_schema(tags=["Favorites"]),
     toggle=extend_schema(tags=["Favorites"]),
 )
@@ -170,6 +172,10 @@ class FavoriteViewSet(viewsets.ModelViewSet):
 @extend_schema_view(
     list=extend_schema(tags=["Users"]),
     retrieve=extend_schema(tags=["Users"]),
+    create=extend_schema(tags=["Users"]),
+    update=extend_schema(tags=["Users"]),
+    partial_update=extend_schema(tags=["Users"]),
+    destroy=extend_schema(tags=["Users"]),
     places=extend_schema(tags=["Users"]),
 )
 class UserViewSet(viewsets.ModelViewSet):
@@ -420,7 +426,12 @@ class PlaceViewSet(viewsets.ModelViewSet):
 # ============================================
 # VUE: Register (Créer un compte)
 # ============================================
-@extend_schema(tags=["Authentication"])
+@extend_schema(
+    tags=["Authentication"],
+    description="Créer un nouvel utilisateur et obtenir un token d'authentification.",
+    request=RegisterSerializer,
+    responses={201: RegisterSerializer, 400: {}}
+)
 @api_view(['POST'])
 def register(request):
     """
@@ -482,7 +493,12 @@ def register(request):
 # ============================================
 # VUE: Login (Connexion)
 # ============================================
-@extend_schema(tags=["Authentication"])
+@extend_schema(
+    tags=["Authentication"],
+    description="Se connecter et obtenir un token d'authentification.",
+    request=LoginSerializer,
+    responses={200: LoginSerializer, 401: {}, 404: {}}
+)
 @api_view(['POST'])
 def login(request):
     """
@@ -543,7 +559,11 @@ def login(request):
 # ============================================
 # VUE: Logout (Déconnexion)
 # ============================================
-@extend_schema(tags=["Authentication"])
+@extend_schema(
+    tags=["Authentication"],
+    description="Se déconnecter et supprimer le token d'authentification.",
+    responses={200: LogoutSerializer, 401: {}}
+)
 @api_view(['POST'])
 def logout(request):
     """
@@ -581,6 +601,8 @@ def logout(request):
     list=extend_schema(tags=["Visits"]),
     retrieve=extend_schema(tags=["Visits"]),
     create=extend_schema(tags=["Visits"]),
+    update=extend_schema(tags=["Visits"]),
+    partial_update=extend_schema(tags=["Visits"]),
     destroy=extend_schema(tags=["Visits"]),
 )
 class VisitViewSet(viewsets.ModelViewSet):

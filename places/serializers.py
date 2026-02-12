@@ -104,7 +104,7 @@ class PlaceSerializer(serializers.ModelSerializer):
         # Affiche tous les champs du modèle
         fields = '__all__'
     
-    def get_image(self, obj):
+    def get_image(self, obj) -> str | None:
         """Retourne l'URL complète de l'image (avec domaine)"""
         request = self.context.get('request')
         if obj.image:
@@ -117,15 +117,15 @@ class PlaceSerializer(serializers.ModelSerializer):
             return image_url
         return None
     
-    def get_reviews_count(self, obj):
+    def get_reviews_count(self, obj) -> int:
         """Compte le nombre d'avis de cette place"""
         return obj.reviews.count()
     
-    def get_favorites_count(self, obj):
+    def get_favorites_count(self, obj) -> int:
         """Compte le nombre de fois que cette place a été mise en favori"""
         return obj.favorited_by.count()
     
-    def get_is_favorite(self, obj):
+    def get_is_favorite(self, obj) -> bool:
         """Vérifie si l'utilisateur actuel a mis en favori cette place"""
         request = self.context.get('request')
         
@@ -158,5 +158,31 @@ class VisitSerializer(serializers.ModelSerializer):
         model = Visit
         fields = ('id', 'place', 'place_name', 'place_address', 'place_city', 'visited_at', 'duration_minutes', 'personal_note')
         read_only_fields = ('id', 'visited_at')
+
+
+# ============================================
+# SERIALIZER: Authentication
+# ============================================
+class RegisterSerializer(serializers.Serializer):
+    """Serializer pour l'enregistrement d'un nouvel utilisateur"""
+    username = serializers.CharField(max_length=150)
+    email = serializers.EmailField(required=False)
+    password = serializers.CharField(write_only=True, min_length=6)
+    token = serializers.CharField(read_only=True)
+    user_id = serializers.IntegerField(read_only=True)
+
+
+class LoginSerializer(serializers.Serializer):
+    """Serializer pour la connexion"""
+    username = serializers.CharField()
+    password = serializers.CharField(write_only=True)
+    token = serializers.CharField(read_only=True)
+    user_id = serializers.IntegerField(read_only=True)
+    email = serializers.EmailField(read_only=True)
+
+
+class LogoutSerializer(serializers.Serializer):
+    """Serializer pour la déconnexion"""
+    status = serializers.CharField(read_only=True)
 
 

@@ -1,0 +1,2063 @@
+openapi: 3.0.3
+info:
+  title: Spotfinder API
+  version: 1.0.0
+  description: API REST pour découvrir et gérer des lieux
+paths:
+  /:
+    get:
+      operationId: root_retrieve
+      description: Endpoint racine de l'API. Retourne un message de bienvenue et le
+        lien vers la documentation.
+      tags:
+      - Root
+      security:
+      - tokenAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/auth/login/:
+    post:
+      operationId: api_auth_login_create
+      description: Se connecter et obtenir un token d'authentification.
+      tags:
+      - Authentication
+      requestBody:
+        content:
+          type:
+            schema:
+              type: object
+              additionalProperties: {}
+              description: Unspecified request body
+          properties:
+            schema:
+              username:
+                type: string
+              password:
+                type: string
+      security:
+      - tokenAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  user_id:
+                    type: integer
+                  username:
+                    type: string
+                  email:
+                    type: string
+                  token:
+                    type: string
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+          description: ''
+  /api/auth/logout/:
+    post:
+      operationId: api_auth_logout_create
+      description: Se déconnecter et supprimer le token d'authentification.
+      tags:
+      - Authentication
+      security:
+      - tokenAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+          description: ''
+        '401':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+          description: ''
+  /api/auth/register/:
+    post:
+      operationId: api_auth_register_create
+      description: Créer un nouvel utilisateur et obtenir un token d'authentification.
+      tags:
+      - Authentication
+      requestBody:
+        content:
+          type:
+            schema:
+              type: object
+              additionalProperties: {}
+              description: Unspecified request body
+          properties:
+            schema:
+              username:
+                type: string
+              email:
+                type: string
+              password:
+                type: string
+      security:
+      - tokenAuth: []
+      - {}
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  user_id:
+                    type: integer
+                  username:
+                    type: string
+                  email:
+                    type: string
+                  token:
+                    type: string
+          description: ''
+        '400':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+          description: ''
+  /api/categories/:
+    get:
+      operationId: api_categories_list
+      description: |-
+        ViewSet pour gérer les catégories.
+        Liste complète des opérations CRUD.
+      parameters:
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      tags:
+      - Categories
+      security:
+      - tokenAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedCategoryList'
+          description: ''
+    post:
+      operationId: api_categories_create
+      description: |-
+        ViewSet pour gérer les catégories.
+        Liste complète des opérations CRUD.
+      tags:
+      - Categories
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Category'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Category'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Category'
+        required: true
+      security:
+      - tokenAuth: []
+      - {}
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Category'
+          description: ''
+  /api/categories/{id}/:
+    get:
+      operationId: api_categories_retrieve
+      description: |-
+        ViewSet pour gérer les catégories.
+        Liste complète des opérations CRUD.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this category.
+        required: true
+      tags:
+      - Categories
+      security:
+      - tokenAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Category'
+          description: ''
+    put:
+      operationId: api_categories_update
+      description: |-
+        ViewSet pour gérer les catégories.
+        Liste complète des opérations CRUD.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this category.
+        required: true
+      tags:
+      - Categories
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Category'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Category'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Category'
+        required: true
+      security:
+      - tokenAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Category'
+          description: ''
+    patch:
+      operationId: api_categories_partial_update
+      description: |-
+        ViewSet pour gérer les catégories.
+        Liste complète des opérations CRUD.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this category.
+        required: true
+      tags:
+      - Categories
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedCategory'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedCategory'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedCategory'
+      security:
+      - tokenAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Category'
+          description: ''
+    delete:
+      operationId: api_categories_destroy
+      description: |-
+        ViewSet pour gérer les catégories.
+        Liste complète des opérations CRUD.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this category.
+        required: true
+      tags:
+      - Categories
+      security:
+      - tokenAuth: []
+      - {}
+      responses:
+        '204':
+          description: No response body
+  /api/favorites/:
+    get:
+      operationId: api_favorites_list
+      description: |-
+        ViewSet pour gérer les favoris.
+        - Chaque utilisateur ne voit que ses propres favoris
+        - Seuls les utilisateurs authentifiés peuvent créer/modifier
+      parameters:
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      tags:
+      - Favorites
+      security:
+      - tokenAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedFavoriteList'
+          description: ''
+    post:
+      operationId: api_favorites_create
+      description: |-
+        ViewSet pour gérer les favoris.
+        - Chaque utilisateur ne voit que ses propres favoris
+        - Seuls les utilisateurs authentifiés peuvent créer/modifier
+      tags:
+      - Favorites
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Favorite'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Favorite'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Favorite'
+        required: true
+      security:
+      - tokenAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Favorite'
+          description: ''
+  /api/favorites/{id}/:
+    get:
+      operationId: api_favorites_retrieve
+      description: |-
+        ViewSet pour gérer les favoris.
+        - Chaque utilisateur ne voit que ses propres favoris
+        - Seuls les utilisateurs authentifiés peuvent créer/modifier
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        required: true
+      tags:
+      - Favorites
+      security:
+      - tokenAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Favorite'
+          description: ''
+    put:
+      operationId: api_favorites_update
+      description: |-
+        ViewSet pour gérer les favoris.
+        - Chaque utilisateur ne voit que ses propres favoris
+        - Seuls les utilisateurs authentifiés peuvent créer/modifier
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        required: true
+      tags:
+      - api
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Favorite'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Favorite'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Favorite'
+        required: true
+      security:
+      - tokenAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Favorite'
+          description: ''
+    patch:
+      operationId: api_favorites_partial_update
+      description: |-
+        ViewSet pour gérer les favoris.
+        - Chaque utilisateur ne voit que ses propres favoris
+        - Seuls les utilisateurs authentifiés peuvent créer/modifier
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        required: true
+      tags:
+      - api
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedFavorite'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedFavorite'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedFavorite'
+      security:
+      - tokenAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Favorite'
+          description: ''
+    delete:
+      operationId: api_favorites_destroy
+      description: |-
+        ViewSet pour gérer les favoris.
+        - Chaque utilisateur ne voit que ses propres favoris
+        - Seuls les utilisateurs authentifiés peuvent créer/modifier
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        required: true
+      tags:
+      - Favorites
+      security:
+      - tokenAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/favorites/toggle/:
+    post:
+      operationId: api_favorites_toggle_create
+      description: |-
+        Action personnalisée pour basculer un favori.
+        Si la place est déjà en favori, la supprime.
+        Sinon, l'ajoute.
+
+        Usage: POST /api/favorites/toggle/ avec {"place_id": 1}
+      tags:
+      - Favorites
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Favorite'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Favorite'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Favorite'
+        required: true
+      security:
+      - tokenAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Favorite'
+          description: ''
+  /api/places/:
+    get:
+      operationId: api_places_list
+      description: |-
+        ViewSet principal pour gérer les places.
+        - Lecture publique : tout le monde peut voir les places
+        - Création/Modification : seuls les utilisateurs authentifiés
+      parameters:
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      tags:
+      - Places
+      security:
+      - tokenAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedPlaceList'
+          description: ''
+    post:
+      operationId: api_places_create
+      description: |-
+        ViewSet principal pour gérer les places.
+        - Lecture publique : tout le monde peut voir les places
+        - Création/Modification : seuls les utilisateurs authentifiés
+      tags:
+      - Places
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Place'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Place'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Place'
+        required: true
+      security:
+      - tokenAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Place'
+          description: ''
+  /api/places/{id}/:
+    get:
+      operationId: api_places_retrieve
+      description: |-
+        ViewSet principal pour gérer les places.
+        - Lecture publique : tout le monde peut voir les places
+        - Création/Modification : seuls les utilisateurs authentifiés
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this place.
+        required: true
+      tags:
+      - Places
+      security:
+      - tokenAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Place'
+          description: ''
+    put:
+      operationId: api_places_update
+      description: |-
+        ViewSet principal pour gérer les places.
+        - Lecture publique : tout le monde peut voir les places
+        - Création/Modification : seuls les utilisateurs authentifiés
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this place.
+        required: true
+      tags:
+      - Places
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Place'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Place'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Place'
+        required: true
+      security:
+      - tokenAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Place'
+          description: ''
+    patch:
+      operationId: api_places_partial_update
+      description: |-
+        ViewSet principal pour gérer les places.
+        - Lecture publique : tout le monde peut voir les places
+        - Création/Modification : seuls les utilisateurs authentifiés
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this place.
+        required: true
+      tags:
+      - Places
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedPlace'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedPlace'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedPlace'
+      security:
+      - tokenAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Place'
+          description: ''
+    delete:
+      operationId: api_places_destroy
+      description: |-
+        ViewSet principal pour gérer les places.
+        - Lecture publique : tout le monde peut voir les places
+        - Création/Modification : seuls les utilisateurs authentifiés
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this place.
+        required: true
+      tags:
+      - Places
+      security:
+      - tokenAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/places/{id}/add_review/:
+    post:
+      operationId: api_places_add_review_create
+      description: |-
+        Action pour ajouter ou modifier un avis sur une place.
+
+        Usage: POST /api/places/{id}/add_review/
+        Données requis: {"rating": 5, "comment": "Excellent lieu!"}
+
+        Met à jour automatiquement la note moyenne de la place.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this place.
+        required: true
+      tags:
+      - Places
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Place'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Place'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Place'
+        required: true
+      security:
+      - tokenAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Place'
+          description: ''
+  /api/places/{id}/book/:
+    post:
+      operationId: api_places_book_create
+      description: |-
+        Action personnalisée pour réserver une place.
+
+        Usage: POST /api/places/{id}/book/
+
+        TODO: Implémentez la logique complète de réservation
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this place.
+        required: true
+      tags:
+      - Places
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Place'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Place'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Place'
+        required: true
+      security:
+      - tokenAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Place'
+          description: ''
+  /api/places/{id}/favorite/:
+    post:
+      operationId: api_places_favorite_create
+      description: |-
+        Action pour ajouter ou retirer une place des favoris.
+
+        Usage:
+        - POST /api/places/{id}/favorite/ - Ajouter aux favoris
+        - DELETE /api/places/{id}/favorite/ - Retirer des favoris
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this place.
+        required: true
+      tags:
+      - Places
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Place'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Place'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Place'
+        required: true
+      security:
+      - tokenAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Place'
+          description: ''
+    delete:
+      operationId: api_places_favorite_destroy
+      description: |-
+        Action pour ajouter ou retirer une place des favoris.
+
+        Usage:
+        - POST /api/places/{id}/favorite/ - Ajouter aux favoris
+        - DELETE /api/places/{id}/favorite/ - Retirer des favoris
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this place.
+        required: true
+      tags:
+      - Places
+      security:
+      - tokenAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/places/{id}/reviews/:
+    get:
+      operationId: api_places_reviews_retrieve
+      description: |-
+        Action pour voir tous les avis d'une place.
+
+        Usage: GET /api/places/{id}/reviews/
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this place.
+        required: true
+      tags:
+      - Places
+      security:
+      - tokenAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Place'
+          description: ''
+  /api/places/search/:
+    get:
+      operationId: api_places_search_retrieve
+      description: |-
+        Action de recherche avancée pour filtrer les places.
+
+        Paramètres supportés:
+        - search: Recherche par nom, ville, adresse ou description
+        - budget_min: Budget minimum
+        - budget_max: Budget maximum
+        - category: Catégorie (restaurant, hôtel, etc.)
+        - min_rating: Note minimale
+        - city: Nom de la ville
+        - page: Numéro de page (défaut: 1)
+        - page_size: Nombre de résultats par page (max: 100)
+
+        Exemple: /api/places/search/?search=restaurant&city=Paris&budget_max=50000&min_rating=4
+      tags:
+      - Places
+      security:
+      - tokenAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Place'
+          description: ''
+  /api/reviews/:
+    get:
+      operationId: api_reviews_list
+      description: |-
+        ViewSet pour gérer les avis.
+        - Lecture publique : tout le monde peut voir les avis
+        - Création : seuls les utilisateurs authentifiés peuvent créer
+      parameters:
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      tags:
+      - Reviews
+      security:
+      - tokenAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedReviewList'
+          description: ''
+    post:
+      operationId: api_reviews_create
+      description: |-
+        ViewSet pour gérer les avis.
+        - Lecture publique : tout le monde peut voir les avis
+        - Création : seuls les utilisateurs authentifiés peuvent créer
+      tags:
+      - Reviews
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Review'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Review'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Review'
+        required: true
+      security:
+      - tokenAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Review'
+          description: ''
+  /api/reviews/{id}/:
+    get:
+      operationId: api_reviews_retrieve
+      description: |-
+        ViewSet pour gérer les avis.
+        - Lecture publique : tout le monde peut voir les avis
+        - Création : seuls les utilisateurs authentifiés peuvent créer
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this review.
+        required: true
+      tags:
+      - Reviews
+      security:
+      - tokenAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Review'
+          description: ''
+    put:
+      operationId: api_reviews_update
+      description: |-
+        ViewSet pour gérer les avis.
+        - Lecture publique : tout le monde peut voir les avis
+        - Création : seuls les utilisateurs authentifiés peuvent créer
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this review.
+        required: true
+      tags:
+      - Reviews
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Review'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Review'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Review'
+        required: true
+      security:
+      - tokenAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Review'
+          description: ''
+    patch:
+      operationId: api_reviews_partial_update
+      description: |-
+        ViewSet pour gérer les avis.
+        - Lecture publique : tout le monde peut voir les avis
+        - Création : seuls les utilisateurs authentifiés peuvent créer
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this review.
+        required: true
+      tags:
+      - Reviews
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedReview'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedReview'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedReview'
+      security:
+      - tokenAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Review'
+          description: ''
+    delete:
+      operationId: api_reviews_destroy
+      description: |-
+        ViewSet pour gérer les avis.
+        - Lecture publique : tout le monde peut voir les avis
+        - Création : seuls les utilisateurs authentifiés peuvent créer
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this review.
+        required: true
+      tags:
+      - Reviews
+      security:
+      - tokenAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/users/:
+    get:
+      operationId: api_users_list
+      description: |-
+        ViewSet pour gérer les utilisateurs.
+        - Les utilisateurs normaux ne voient que leur profil
+        - Les administrateurs voient tous les profils
+      parameters:
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      tags:
+      - Users
+      security:
+      - tokenAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedUserList'
+          description: ''
+    post:
+      operationId: api_users_create
+      description: |-
+        ViewSet pour gérer les utilisateurs.
+        - Les utilisateurs normaux ne voient que leur profil
+        - Les administrateurs voient tous les profils
+      tags:
+      - api
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/User'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/User'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/User'
+        required: true
+      security:
+      - tokenAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+          description: ''
+  /api/users/{id}/:
+    get:
+      operationId: api_users_retrieve
+      description: |-
+        ViewSet pour gérer les utilisateurs.
+        - Les utilisateurs normaux ne voient que leur profil
+        - Les administrateurs voient tous les profils
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this user.
+        required: true
+      tags:
+      - Users
+      security:
+      - tokenAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+          description: ''
+    put:
+      operationId: api_users_update
+      description: |-
+        ViewSet pour gérer les utilisateurs.
+        - Les utilisateurs normaux ne voient que leur profil
+        - Les administrateurs voient tous les profils
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this user.
+        required: true
+      tags:
+      - api
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/User'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/User'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/User'
+        required: true
+      security:
+      - tokenAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+          description: ''
+    patch:
+      operationId: api_users_partial_update
+      description: |-
+        ViewSet pour gérer les utilisateurs.
+        - Les utilisateurs normaux ne voient que leur profil
+        - Les administrateurs voient tous les profils
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this user.
+        required: true
+      tags:
+      - api
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedUser'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedUser'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedUser'
+      security:
+      - tokenAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+          description: ''
+    delete:
+      operationId: api_users_destroy
+      description: |-
+        ViewSet pour gérer les utilisateurs.
+        - Les utilisateurs normaux ne voient que leur profil
+        - Les administrateurs voient tous les profils
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this user.
+        required: true
+      tags:
+      - api
+      security:
+      - tokenAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/users/{id}/places/:
+    get:
+      operationId: api_users_places_retrieve
+      description: |-
+        Action personnalisée pour voir les places créées par un utilisateur.
+
+        Usage: GET /api/users/{id}/places/
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: integer
+        description: A unique integer value identifying this user.
+        required: true
+      tags:
+      - Users
+      security:
+      - tokenAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+          description: ''
+  /api/visits/:
+    get:
+      operationId: api_visits_list
+      description: |-
+        ViewSet pour gérer l'historique des visites.
+        - Chaque utilisateur ne voit que ses propres visites
+        - Seuls les utilisateurs authentifiés peuvent créer/modifier
+      parameters:
+      - name: page
+        required: false
+        in: query
+        description: A page number within the paginated result set.
+        schema:
+          type: integer
+      - name: page_size
+        required: false
+        in: query
+        description: Number of results to return per page.
+        schema:
+          type: integer
+      tags:
+      - Visits
+      security:
+      - tokenAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedVisitList'
+          description: ''
+    post:
+      operationId: api_visits_create
+      description: |-
+        ViewSet pour gérer l'historique des visites.
+        - Chaque utilisateur ne voit que ses propres visites
+        - Seuls les utilisateurs authentifiés peuvent créer/modifier
+      tags:
+      - Visits
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Visit'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Visit'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Visit'
+        required: true
+      security:
+      - tokenAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Visit'
+          description: ''
+  /api/visits/{id}/:
+    get:
+      operationId: api_visits_retrieve
+      description: |-
+        ViewSet pour gérer l'historique des visites.
+        - Chaque utilisateur ne voit que ses propres visites
+        - Seuls les utilisateurs authentifiés peuvent créer/modifier
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        required: true
+      tags:
+      - Visits
+      security:
+      - tokenAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Visit'
+          description: ''
+    put:
+      operationId: api_visits_update
+      description: |-
+        ViewSet pour gérer l'historique des visites.
+        - Chaque utilisateur ne voit que ses propres visites
+        - Seuls les utilisateurs authentifiés peuvent créer/modifier
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        required: true
+      tags:
+      - api
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Visit'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Visit'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Visit'
+        required: true
+      security:
+      - tokenAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Visit'
+          description: ''
+    patch:
+      operationId: api_visits_partial_update
+      description: |-
+        ViewSet pour gérer l'historique des visites.
+        - Chaque utilisateur ne voit que ses propres visites
+        - Seuls les utilisateurs authentifiés peuvent créer/modifier
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        required: true
+      tags:
+      - api
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedVisit'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedVisit'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedVisit'
+      security:
+      - tokenAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Visit'
+          description: ''
+    delete:
+      operationId: api_visits_destroy
+      description: |-
+        ViewSet pour gérer l'historique des visites.
+        - Chaque utilisateur ne voit que ses propres visites
+        - Seuls les utilisateurs authentifiés peuvent créer/modifier
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        required: true
+      tags:
+      - Visits
+      security:
+      - tokenAuth: []
+      responses:
+        '204':
+          description: No response body
+components:
+  schemas:
+    Category:
+      type: object
+      description: |-
+        Serializer pour convertir les objets Category en JSON et vice-versa.
+        Utilisé pour l'API REST.
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        name:
+          type: string
+          maxLength: 100
+        description:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - created_at
+      - id
+      - name
+    CategoryEnum:
+      enum:
+      - restaurant
+      - touristique
+      - loisir
+      - hotel
+      - bar
+      type: string
+      description: |-
+        * `restaurant` - Restaurant
+        * `touristique` - Site Touristique
+        * `loisir` - Loisir
+        * `hotel` - Hôtel
+        * `bar` - Bar
+    Favorite:
+      type: object
+      description: |-
+        Serializer pour les favoris.
+        Affiche le nom de la place au lieu de son ID.
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        place:
+          type: integer
+        place_name:
+          type: string
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - created_at
+      - id
+      - place
+      - place_name
+    PaginatedCategoryList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/Category'
+    PaginatedFavoriteList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/Favorite'
+    PaginatedPlaceList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/Place'
+    PaginatedReviewList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/Review'
+    PaginatedUserList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/User'
+    PaginatedVisitList:
+      type: object
+      required:
+      - count
+      - results
+      properties:
+        count:
+          type: integer
+          example: 123
+        next:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=4
+        previous:
+          type: string
+          nullable: true
+          format: uri
+          example: http://api.example.org/accounts/?page=2
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/Visit'
+    PatchedCategory:
+      type: object
+      description: |-
+        Serializer pour convertir les objets Category en JSON et vice-versa.
+        Utilisé pour l'API REST.
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        name:
+          type: string
+          maxLength: 100
+        description:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+    PatchedFavorite:
+      type: object
+      description: |-
+        Serializer pour les favoris.
+        Affiche le nom de la place au lieu de son ID.
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        place:
+          type: integer
+        place_name:
+          type: string
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+    PatchedPlace:
+      type: object
+      description: |-
+        Serializer principal pour les places.
+        Affiche tous les détails d'une place avec des données calculées.
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        image:
+          type: string
+          nullable: true
+          description: Retourne l'URL complète de l'image (avec domaine)
+          readOnly: true
+        owner_username:
+          type: string
+          readOnly: true
+        reviews_count:
+          type: integer
+          description: Compte le nombre d'avis de cette place
+          readOnly: true
+        favorites_count:
+          type: integer
+          description: Compte le nombre de fois que cette place a été mise en favori
+          readOnly: true
+        is_favorite:
+          type: boolean
+          description: Vérifie si l'utilisateur actuel a mis en favori cette place
+          readOnly: true
+        name:
+          type: string
+          maxLength: 255
+        description:
+          type: string
+        phone_number:
+          type: string
+          maxLength: 20
+        category:
+          $ref: '#/components/schemas/CategoryEnum'
+        city:
+          type: string
+          maxLength: 100
+        address:
+          type: string
+          maxLength: 255
+        latitude:
+          type: number
+          format: double
+        longitude:
+          type: number
+          format: double
+        budget_min:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,8}(?:\.\d{0,2})?$
+          nullable: true
+        budget_max:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,8}(?:\.\d{0,2})?$
+          nullable: true
+        rating:
+          type: number
+          format: double
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+        owner:
+          type: integer
+          nullable: true
+    PatchedReview:
+      type: object
+      description: |-
+        Serializer pour les avis/commentaires.
+        Affiche le nom d'utilisateur et l'ID à la place de l'objet User complet.
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        place:
+          type: integer
+        user_id:
+          type: string
+          readOnly: true
+        username:
+          type: string
+          readOnly: true
+        rating:
+          allOf:
+          - $ref: '#/components/schemas/RatingEnum'
+          minimum: -2147483648
+          maximum: 2147483647
+        comment:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+    PatchedUser:
+      type: object
+      description: |-
+        Serializer pour les utilisateurs.
+        Affiche les infos publiques de l'utilisateur.
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        username:
+          type: string
+          description: Required. 150 characters or fewer. Letters, digits and @/./+/-/_
+            only.
+          pattern: ^[\w.@+-]+$
+          maxLength: 150
+        email:
+          type: string
+          format: email
+          title: Email address
+          maxLength: 254
+        first_name:
+          type: string
+          maxLength: 150
+        last_name:
+          type: string
+          maxLength: 150
+    PatchedVisit:
+      type: object
+      description: |-
+        Serializer pour l'historique des visites.
+        Affiche le nom de la place au lieu de son ID.
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        place:
+          type: integer
+        place_name:
+          type: string
+          readOnly: true
+        place_address:
+          type: string
+          readOnly: true
+        place_city:
+          type: string
+          readOnly: true
+        visited_at:
+          type: string
+          format: date-time
+          readOnly: true
+        duration_minutes:
+          type: integer
+          maximum: 2147483647
+          minimum: 0
+          nullable: true
+        personal_note:
+          type: string
+    Place:
+      type: object
+      description: |-
+        Serializer principal pour les places.
+        Affiche tous les détails d'une place avec des données calculées.
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        image:
+          type: string
+          nullable: true
+          description: Retourne l'URL complète de l'image (avec domaine)
+          readOnly: true
+        owner_username:
+          type: string
+          readOnly: true
+        reviews_count:
+          type: integer
+          description: Compte le nombre d'avis de cette place
+          readOnly: true
+        favorites_count:
+          type: integer
+          description: Compte le nombre de fois que cette place a été mise en favori
+          readOnly: true
+        is_favorite:
+          type: boolean
+          description: Vérifie si l'utilisateur actuel a mis en favori cette place
+          readOnly: true
+        name:
+          type: string
+          maxLength: 255
+        description:
+          type: string
+        phone_number:
+          type: string
+          maxLength: 20
+        category:
+          $ref: '#/components/schemas/CategoryEnum'
+        city:
+          type: string
+          maxLength: 100
+        address:
+          type: string
+          maxLength: 255
+        latitude:
+          type: number
+          format: double
+        longitude:
+          type: number
+          format: double
+        budget_min:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,8}(?:\.\d{0,2})?$
+          nullable: true
+        budget_max:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,8}(?:\.\d{0,2})?$
+          nullable: true
+        rating:
+          type: number
+          format: double
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+        owner:
+          type: integer
+          nullable: true
+      required:
+      - category
+      - city
+      - created_at
+      - favorites_count
+      - id
+      - image
+      - is_favorite
+      - latitude
+      - longitude
+      - name
+      - owner_username
+      - reviews_count
+      - updated_at
+    RatingEnum:
+      enum:
+      - 1
+      - 2
+      - 3
+      - 4
+      - 5
+      type: integer
+      description: |-
+        * `1` - 1
+        * `2` - 2
+        * `3` - 3
+        * `4` - 4
+        * `5` - 5
+    Review:
+      type: object
+      description: |-
+        Serializer pour les avis/commentaires.
+        Affiche le nom d'utilisateur et l'ID à la place de l'objet User complet.
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        place:
+          type: integer
+        user_id:
+          type: string
+          readOnly: true
+        username:
+          type: string
+          readOnly: true
+        rating:
+          allOf:
+          - $ref: '#/components/schemas/RatingEnum'
+          minimum: -2147483648
+          maximum: 2147483647
+        comment:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - comment
+      - created_at
+      - id
+      - place
+      - rating
+      - updated_at
+      - user_id
+      - username
+    User:
+      type: object
+      description: |-
+        Serializer pour les utilisateurs.
+        Affiche les infos publiques de l'utilisateur.
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        username:
+          type: string
+          description: Required. 150 characters or fewer. Letters, digits and @/./+/-/_
+            only.
+          pattern: ^[\w.@+-]+$
+          maxLength: 150
+        email:
+          type: string
+          format: email
+          title: Email address
+          maxLength: 254
+        first_name:
+          type: string
+          maxLength: 150
+        last_name:
+          type: string
+          maxLength: 150
+      required:
+      - id
+      - username
+    Visit:
+      type: object
+      description: |-
+        Serializer pour l'historique des visites.
+        Affiche le nom de la place au lieu de son ID.
+      properties:
+        id:
+          type: integer
+          readOnly: true
+        place:
+          type: integer
+        place_name:
+          type: string
+          readOnly: true
+        place_address:
+          type: string
+          readOnly: true
+        place_city:
+          type: string
+          readOnly: true
+        visited_at:
+          type: string
+          format: date-time
+          readOnly: true
+        duration_minutes:
+          type: integer
+          maximum: 2147483647
+          minimum: 0
+          nullable: true
+        personal_note:
+          type: string
+      required:
+      - id
+      - place
+      - place_address
+      - place_city
+      - place_name
+      - visited_at
+  securitySchemes:
+    tokenAuth:
+      type: apiKey
+      in: header
+      name: Authorization
+      description: Token-based authentication with required prefix "Token"
