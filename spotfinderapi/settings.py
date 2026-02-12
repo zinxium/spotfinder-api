@@ -48,7 +48,8 @@ SECRET_KEY = get_secret('SECRET_KEY', default='django-insecure-dev-key-change-in
 DEBUG = config('DEBUG', default=False, cast=bool)
 
 # Liste des hôtes autorisés - OBLIGATOIRE en production
-ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='*', cast=Csv)
+_allowed_hosts = config('ALLOWED_HOSTS', default='*')
+ALLOWED_HOSTS = [h.strip() for h in _allowed_hosts.split(',')]
 
 
 # Application definition
