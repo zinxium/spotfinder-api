@@ -54,13 +54,17 @@ Sur le dashboard Render :
 
 Dans le Web Service Render, allez à **"Environment"** et ajoutez :
 
+#### Option A (⭐ Recommandée) : DATABASE_URL
+Le plus simple et sûr pour la production :
+
 ```env
 # SÉCURITÉ
 DEBUG=False
 SECRET_KEY=your-production-secret-key-here
 ALLOWED_HOSTS=your-app-name.onrender.com
 
-# BASE DE DONNÉES (coller l'Internal Database URL)
+# BASE DE DONNÉES - Render fournit automatiquement DATABASE_URL
+# Copiez l'Internal Database URL depuis votre PostgreSQL Render
 DATABASE_URL=postgresql://user:password@host:port/dbname
 
 # CLOUDINARY (si vous l'utilisez)
@@ -78,6 +82,26 @@ SECURE_SSL_REDIRECT=True
 SESSION_COOKIE_SECURE=True
 CSRF_COOKIE_SECURE=True
 ```
+
+#### Option B : Credentials individuels
+⚠️ **En production, DB_PASSWORD doit être fort et défini explicitement** (pas de valeur par défaut) :
+
+```env
+# SÉCURITÉ
+DEBUG=False
+SECRET_KEY=your-production-secret-key-here
+ALLOWED_HOSTS=your-app-name.onrender.com
+
+# BASE DE DONNÉES - Credentials individuels
+# ⚠️ IMPORTANT: DB_PASSWORD est OBLIGATOIRE en production et doit être fort
+DB_NAME=spotfinder_db
+DB_USER=spotfinder_root
+DB_PASSWORD=your_very_secure_password_here
+DB_HOST=your-db-host.render.internal
+DB_PORT=5432
+```
+
+**Préférez l'Option A (DATABASE_URL) pour la production car elle est plus sûre et facile à gérer.**
 
 ---
 

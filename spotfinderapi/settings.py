@@ -112,21 +112,27 @@ WSGI_APPLICATION = 'spotfinderapi.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/6.0/ref/settings/#databases
 
-# Configuration PostgreSQL
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.postgresql',
-        'NAME': config('DB_NAME', default='spotfinder_db'),
-        'USER': config('DB_USER', default='spotfinder_user'),
-        'PASSWORD': config('DB_PASSWORD', default='password'),
-        'HOST': config('DB_HOST', default='localhost'),
-        'PORT': config('DB_PORT', default='5432'),
-    }
-}
+# Configuration PostgreSQL - Priorité: DATABASE_URL > credentials individuels
+DATABASE_URL = config('DATABASE_URL', default=None)
 
-# Alternative : Configuration via DATABASE_URL (recommandé pour production)
-# DATABASE_URL = config('DATABASE_URL', default='postgresql://user:password@localhost:5432/dbname')
-# Utilisez dj-database-url pour parser DATABASE_URL si nécessaire
+if DATABASE_URL:
+    # Recommandé pour production : utiliser DATABASE_URL
+    import dj_database_url
+    DATABASES = {
+        'default': dj_database_url.config(default=DATABASE_URL, conn_max_age=600)
+    }
+else:
+    # Credentials individuels - DB_PASSWORD est obligatoire en production
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.postgresql',
+            'NAME': get_secret('DB_NAME', default='spotfinder_db'),
+            'USER': get_secret('DB_USER', default='spotfinder_user'),
+            'PASSWORD': get_secret('DB_PASSWORD'),  # OBLIGATOIRE en production
+            'HOST': get_secret('DB_HOST', default='localhost'),
+            'PORT': get_secret('DB_PORT', default='5432'),
+        }
+    }
 
 
 # Password validation
