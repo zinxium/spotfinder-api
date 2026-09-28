@@ -141,6 +141,9 @@ class FavoriteViewSet(viewsets.ModelViewSet):
     
     def get_queryset(self):
         """Chaque utilisateur ne voit que ses propres favoris"""
+        # Génération du schéma Swagger : pas d'utilisateur connecté
+        if getattr(self, 'swagger_fake_view', False):
+            return Favorite.objects.none()
         return Favorite.objects.filter(user=self.request.user)
     
     def perform_create(self, serializer):
@@ -602,6 +605,10 @@ class VisitViewSet(viewsets.ModelViewSet):
         Filtre les visites pour n'afficher que celles de l'utilisateur actuel.
         Peut filtrer par place avec ?place_id=X
         """
+        # Génération du schéma Swagger : pas d'utilisateur connecté
+        if getattr(self, 'swagger_fake_view', False):
+            return Visit.objects.none()
+        
         queryset = Visit.objects.filter(user=self.request.user)
         
         # Si un place_id est fourni, filtre les visites de cette place
