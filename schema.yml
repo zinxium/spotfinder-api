@@ -1,8 +1,13 @@
 openapi: 3.0.3
 info:
-  title: Spotfinder API
-  version: 1.0.0
-  description: API REST pour découvrir et gérer des lieux
+  title: SpotFinder API
+  version: 1.1.0
+  description: API REST pour SpotFinder - Trouvez et partagez vos lieux préférés
+  contact:
+    name: SpotFinder Support
+    email: support@spotfinder.com
+  license:
+    name: MIT License
 paths:
   /:
     get:
@@ -12,7 +17,7 @@ paths:
       tags:
       - Root
       security:
-      - tokenAuth: []
+      - jwtAuth: []
       - {}
       responses:
         '200':
@@ -20,127 +25,117 @@ paths:
   /api/auth/login/:
     post:
       operationId: api_auth_login_create
-      description: Se connecter et obtenir un token d'authentification.
+      description: Se connecter et obtenir les tokens JWT (access + refresh).
       tags:
       - Authentication
       requestBody:
         content:
-          type:
+          application/json:
             schema:
-              type: object
-              additionalProperties: {}
-              description: Unspecified request body
-          properties:
+              $ref: '#/components/schemas/Login'
+          application/x-www-form-urlencoded:
             schema:
-              username:
-                type: string
-              password:
-                type: string
+              $ref: '#/components/schemas/Login'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Login'
+        required: true
       security:
-      - tokenAuth: []
+      - jwtAuth: []
       - {}
       responses:
         '200':
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  user_id:
-                    type: integer
-                  username:
-                    type: string
-                  email:
-                    type: string
-                  token:
-                    type: string
+                $ref: '#/components/schemas/AuthResponse'
           description: ''
-        '401':
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  error:
-                    type: string
-          description: ''
+        '400':
+          description: No response body
   /api/auth/logout/:
     post:
       operationId: api_auth_logout_create
-      description: Se déconnecter et supprimer le token d'authentification.
+      description: 'Se déconnecter : révoque le refresh token fourni.'
       tags:
       - Authentication
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Logout'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/Logout'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Logout'
+        required: true
       security:
-      - tokenAuth: []
-      - {}
+      - jwtAuth: []
+      responses:
+        '205':
+          description: No response body
+        '400':
+          description: No response body
+        '401':
+          description: No response body
+  /api/auth/refresh/:
+    post:
+      operationId: api_auth_refresh_create
+      description: Échanger un refresh token contre un nouveau couple access/refresh.
+        L'ancien refresh token est révoqué.
+      tags:
+      - Authentication
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TokenRefresh'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/TokenRefresh'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/TokenRefresh'
+        required: true
       responses:
         '200':
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  status:
-                    type: string
-          description: ''
-        '401':
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  error:
-                    type: string
+                $ref: '#/components/schemas/TokenRefresh'
           description: ''
   /api/auth/register/:
     post:
       operationId: api_auth_register_create
-      description: Créer un nouvel utilisateur et obtenir un token d'authentification.
+      description: Créer un nouvel utilisateur et obtenir ses tokens JWT (access +
+        refresh).
       tags:
       - Authentication
       requestBody:
         content:
-          type:
+          application/json:
             schema:
-              type: object
-              additionalProperties: {}
-              description: Unspecified request body
-          properties:
+              $ref: '#/components/schemas/Register'
+          application/x-www-form-urlencoded:
             schema:
-              username:
-                type: string
-              email:
-                type: string
-              password:
-                type: string
+              $ref: '#/components/schemas/Register'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/Register'
+        required: true
       security:
-      - tokenAuth: []
+      - jwtAuth: []
       - {}
       responses:
         '201':
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  user_id:
-                    type: integer
-                  username:
-                    type: string
-                  email:
-                    type: string
-                  token:
-                    type: string
+                $ref: '#/components/schemas/AuthResponse'
           description: ''
         '400':
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  error:
-                    type: string
-          description: ''
+          description: No response body
   /api/categories/:
     get:
       operationId: api_categories_list
@@ -163,8 +158,7 @@ paths:
       tags:
       - Categories
       security:
-      - tokenAuth: []
-      - {}
+      - jwtAuth: []
       responses:
         '200':
           content:
@@ -192,8 +186,7 @@ paths:
               $ref: '#/components/schemas/Category'
         required: true
       security:
-      - tokenAuth: []
-      - {}
+      - jwtAuth: []
       responses:
         '201':
           content:
@@ -217,8 +210,7 @@ paths:
       tags:
       - Categories
       security:
-      - tokenAuth: []
-      - {}
+      - jwtAuth: []
       responses:
         '200':
           content:
@@ -253,8 +245,7 @@ paths:
               $ref: '#/components/schemas/Category'
         required: true
       security:
-      - tokenAuth: []
-      - {}
+      - jwtAuth: []
       responses:
         '200':
           content:
@@ -288,8 +279,7 @@ paths:
             schema:
               $ref: '#/components/schemas/PatchedCategory'
       security:
-      - tokenAuth: []
-      - {}
+      - jwtAuth: []
       responses:
         '200':
           content:
@@ -312,8 +302,7 @@ paths:
       tags:
       - Categories
       security:
-      - tokenAuth: []
-      - {}
+      - jwtAuth: []
       responses:
         '204':
           description: No response body
@@ -340,7 +329,7 @@ paths:
       tags:
       - Favorites
       security:
-      - tokenAuth: []
+      - jwtAuth: []
       responses:
         '200':
           content:
@@ -369,7 +358,7 @@ paths:
               $ref: '#/components/schemas/Favorite'
         required: true
       security:
-      - tokenAuth: []
+      - jwtAuth: []
       responses:
         '201':
           content:
@@ -393,7 +382,7 @@ paths:
       tags:
       - Favorites
       security:
-      - tokenAuth: []
+      - jwtAuth: []
       responses:
         '200':
           content:
@@ -414,7 +403,7 @@ paths:
           type: string
         required: true
       tags:
-      - api
+      - Favorites
       requestBody:
         content:
           application/json:
@@ -428,7 +417,7 @@ paths:
               $ref: '#/components/schemas/Favorite'
         required: true
       security:
-      - tokenAuth: []
+      - jwtAuth: []
       responses:
         '200':
           content:
@@ -449,7 +438,7 @@ paths:
           type: string
         required: true
       tags:
-      - api
+      - Favorites
       requestBody:
         content:
           application/json:
@@ -462,7 +451,7 @@ paths:
             schema:
               $ref: '#/components/schemas/PatchedFavorite'
       security:
-      - tokenAuth: []
+      - jwtAuth: []
       responses:
         '200':
           content:
@@ -485,7 +474,7 @@ paths:
       tags:
       - Favorites
       security:
-      - tokenAuth: []
+      - jwtAuth: []
       responses:
         '204':
           description: No response body
@@ -513,7 +502,7 @@ paths:
               $ref: '#/components/schemas/Favorite'
         required: true
       security:
-      - tokenAuth: []
+      - jwtAuth: []
       responses:
         '200':
           content:
@@ -544,8 +533,7 @@ paths:
       tags:
       - Places
       security:
-      - tokenAuth: []
-      - {}
+      - jwtAuth: []
       responses:
         '200':
           content:
@@ -574,7 +562,7 @@ paths:
               $ref: '#/components/schemas/Place'
         required: true
       security:
-      - tokenAuth: []
+      - jwtAuth: []
       responses:
         '201':
           content:
@@ -599,8 +587,7 @@ paths:
       tags:
       - Places
       security:
-      - tokenAuth: []
-      - {}
+      - jwtAuth: []
       responses:
         '200':
           content:
@@ -636,7 +623,7 @@ paths:
               $ref: '#/components/schemas/Place'
         required: true
       security:
-      - tokenAuth: []
+      - jwtAuth: []
       responses:
         '200':
           content:
@@ -671,7 +658,7 @@ paths:
             schema:
               $ref: '#/components/schemas/PatchedPlace'
       security:
-      - tokenAuth: []
+      - jwtAuth: []
       responses:
         '200':
           content:
@@ -695,7 +682,7 @@ paths:
       tags:
       - Places
       security:
-      - tokenAuth: []
+      - jwtAuth: []
       responses:
         '204':
           description: No response body
@@ -731,7 +718,7 @@ paths:
               $ref: '#/components/schemas/Place'
         required: true
       security:
-      - tokenAuth: []
+      - jwtAuth: []
       responses:
         '200':
           content:
@@ -770,7 +757,7 @@ paths:
               $ref: '#/components/schemas/Place'
         required: true
       security:
-      - tokenAuth: []
+      - jwtAuth: []
       responses:
         '200':
           content:
@@ -809,7 +796,7 @@ paths:
               $ref: '#/components/schemas/Place'
         required: true
       security:
-      - tokenAuth: []
+      - jwtAuth: []
       responses:
         '200':
           content:
@@ -835,7 +822,7 @@ paths:
       tags:
       - Places
       security:
-      - tokenAuth: []
+      - jwtAuth: []
       responses:
         '204':
           description: No response body
@@ -856,8 +843,7 @@ paths:
       tags:
       - Places
       security:
-      - tokenAuth: []
-      - {}
+      - jwtAuth: []
       responses:
         '200':
           content:
@@ -885,8 +871,7 @@ paths:
       tags:
       - Places
       security:
-      - tokenAuth: []
-      - {}
+      - jwtAuth: []
       responses:
         '200':
           content:
@@ -917,8 +902,7 @@ paths:
       tags:
       - Reviews
       security:
-      - tokenAuth: []
-      - {}
+      - jwtAuth: []
       responses:
         '200':
           content:
@@ -947,7 +931,7 @@ paths:
               $ref: '#/components/schemas/Review'
         required: true
       security:
-      - tokenAuth: []
+      - jwtAuth: []
       responses:
         '201':
           content:
@@ -972,8 +956,7 @@ paths:
       tags:
       - Reviews
       security:
-      - tokenAuth: []
-      - {}
+      - jwtAuth: []
       responses:
         '200':
           content:
@@ -1009,7 +992,7 @@ paths:
               $ref: '#/components/schemas/Review'
         required: true
       security:
-      - tokenAuth: []
+      - jwtAuth: []
       responses:
         '200':
           content:
@@ -1044,7 +1027,7 @@ paths:
             schema:
               $ref: '#/components/schemas/PatchedReview'
       security:
-      - tokenAuth: []
+      - jwtAuth: []
       responses:
         '200':
           content:
@@ -1068,7 +1051,7 @@ paths:
       tags:
       - Reviews
       security:
-      - tokenAuth: []
+      - jwtAuth: []
       responses:
         '204':
           description: No response body
@@ -1095,7 +1078,7 @@ paths:
       tags:
       - Users
       security:
-      - tokenAuth: []
+      - jwtAuth: []
       responses:
         '200':
           content:
@@ -1105,12 +1088,10 @@ paths:
           description: ''
     post:
       operationId: api_users_create
-      description: |-
-        ViewSet pour gérer les utilisateurs.
-        - Les utilisateurs normaux ne voient que leur profil
-        - Les administrateurs voient tous les profils
+      description: Les comptes se créent via /api/auth/register/ (avec validation
+        du mot de passe)
       tags:
-      - api
+      - Users
       requestBody:
         content:
           application/json:
@@ -1124,7 +1105,7 @@ paths:
               $ref: '#/components/schemas/User'
         required: true
       security:
-      - tokenAuth: []
+      - jwtAuth: []
       responses:
         '201':
           content:
@@ -1149,7 +1130,7 @@ paths:
       tags:
       - Users
       security:
-      - tokenAuth: []
+      - jwtAuth: []
       responses:
         '200':
           content:
@@ -1171,7 +1152,7 @@ paths:
         description: A unique integer value identifying this user.
         required: true
       tags:
-      - api
+      - Users
       requestBody:
         content:
           application/json:
@@ -1185,7 +1166,7 @@ paths:
               $ref: '#/components/schemas/User'
         required: true
       security:
-      - tokenAuth: []
+      - jwtAuth: []
       responses:
         '200':
           content:
@@ -1207,7 +1188,7 @@ paths:
         description: A unique integer value identifying this user.
         required: true
       tags:
-      - api
+      - Users
       requestBody:
         content:
           application/json:
@@ -1220,7 +1201,7 @@ paths:
             schema:
               $ref: '#/components/schemas/PatchedUser'
       security:
-      - tokenAuth: []
+      - jwtAuth: []
       responses:
         '200':
           content:
@@ -1242,9 +1223,9 @@ paths:
         description: A unique integer value identifying this user.
         required: true
       tags:
-      - api
+      - Users
       security:
-      - tokenAuth: []
+      - jwtAuth: []
       responses:
         '204':
           description: No response body
@@ -1265,7 +1246,7 @@ paths:
       tags:
       - Users
       security:
-      - tokenAuth: []
+      - jwtAuth: []
       responses:
         '200':
           content:
@@ -1296,7 +1277,7 @@ paths:
       tags:
       - Visits
       security:
-      - tokenAuth: []
+      - jwtAuth: []
       responses:
         '200':
           content:
@@ -1325,7 +1306,7 @@ paths:
               $ref: '#/components/schemas/Visit'
         required: true
       security:
-      - tokenAuth: []
+      - jwtAuth: []
       responses:
         '201':
           content:
@@ -1349,7 +1330,7 @@ paths:
       tags:
       - Visits
       security:
-      - tokenAuth: []
+      - jwtAuth: []
       responses:
         '200':
           content:
@@ -1370,7 +1351,7 @@ paths:
           type: string
         required: true
       tags:
-      - api
+      - Visits
       requestBody:
         content:
           application/json:
@@ -1384,7 +1365,7 @@ paths:
               $ref: '#/components/schemas/Visit'
         required: true
       security:
-      - tokenAuth: []
+      - jwtAuth: []
       responses:
         '200':
           content:
@@ -1405,7 +1386,7 @@ paths:
           type: string
         required: true
       tags:
-      - api
+      - Visits
       requestBody:
         content:
           application/json:
@@ -1418,7 +1399,7 @@ paths:
             schema:
               $ref: '#/components/schemas/PatchedVisit'
       security:
-      - tokenAuth: []
+      - jwtAuth: []
       responses:
         '200':
           content:
@@ -1441,12 +1422,30 @@ paths:
       tags:
       - Visits
       security:
-      - tokenAuth: []
+      - jwtAuth: []
       responses:
         '204':
           description: No response body
 components:
   schemas:
+    AuthResponse:
+      type: object
+      description: 'Réponse de connexion/inscription : utilisateur + tokens JWT'
+      properties:
+        user:
+          allOf:
+          - $ref: '#/components/schemas/User'
+          readOnly: true
+        access:
+          type: string
+          readOnly: true
+        refresh:
+          type: string
+          readOnly: true
+      required:
+      - access
+      - refresh
+      - user
     Category:
       type: object
       description: |-
@@ -1506,6 +1505,27 @@ components:
       - id
       - place
       - place_name
+    Login:
+      type: object
+      description: Serializer pour la connexion
+      properties:
+        username:
+          type: string
+        password:
+          type: string
+          writeOnly: true
+      required:
+      - password
+      - username
+    Logout:
+      type: object
+      description: Serializer pour la déconnexion (révoque le refresh token)
+      properties:
+        refresh:
+          type: string
+          writeOnly: true
+      required:
+      - refresh
     PaginatedCategoryList:
       type: object
       required:
@@ -1744,6 +1764,7 @@ components:
         rating:
           type: number
           format: double
+          readOnly: true
         created_at:
           type: string
           format: date-time
@@ -1754,6 +1775,7 @@ components:
           readOnly: true
         owner:
           type: integer
+          readOnly: true
           nullable: true
     PatchedReview:
       type: object
@@ -1775,8 +1797,8 @@ components:
         rating:
           allOf:
           - $ref: '#/components/schemas/RatingEnum'
-          minimum: -2147483648
-          maximum: 2147483647
+          minimum: -9223372036854775808
+          maximum: 9223372036854775807
         comment:
           type: string
         created_at:
@@ -1839,8 +1861,9 @@ components:
           readOnly: true
         duration_minutes:
           type: integer
-          maximum: 2147483647
+          maximum: 9223372036854775807
           minimum: 0
+          format: int64
           nullable: true
         personal_note:
           type: string
@@ -1908,6 +1931,7 @@ components:
         rating:
           type: number
           format: double
+          readOnly: true
         created_at:
           type: string
           format: date-time
@@ -1918,6 +1942,7 @@ components:
           readOnly: true
         owner:
           type: integer
+          readOnly: true
           nullable: true
       required:
       - category
@@ -1930,7 +1955,9 @@ components:
       - latitude
       - longitude
       - name
+      - owner
       - owner_username
+      - rating
       - reviews_count
       - updated_at
     RatingEnum:
@@ -1947,6 +1974,23 @@ components:
         * `3` - 3
         * `4` - 4
         * `5` - 5
+    Register:
+      type: object
+      description: Serializer pour l'enregistrement d'un nouvel utilisateur
+      properties:
+        username:
+          type: string
+          maxLength: 150
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          writeOnly: true
+      required:
+      - email
+      - password
+      - username
     Review:
       type: object
       description: |-
@@ -1967,8 +2011,8 @@ components:
         rating:
           allOf:
           - $ref: '#/components/schemas/RatingEnum'
-          minimum: -2147483648
-          maximum: 2147483647
+          minimum: -9223372036854775808
+          maximum: 9223372036854775807
         comment:
           type: string
         created_at:
@@ -1988,6 +2032,17 @@ components:
       - updated_at
       - user_id
       - username
+    TokenRefresh:
+      type: object
+      properties:
+        access:
+          type: string
+          readOnly: true
+        refresh:
+          type: string
+      required:
+      - access
+      - refresh
     User:
       type: object
       description: |-
@@ -2043,8 +2098,9 @@ components:
           readOnly: true
         duration_minutes:
           type: integer
-          maximum: 2147483647
+          maximum: 9223372036854775807
           minimum: 0
+          format: int64
           nullable: true
         personal_note:
           type: string
@@ -2056,8 +2112,7 @@ components:
       - place_name
       - visited_at
   securitySchemes:
-    tokenAuth:
-      type: apiKey
-      in: header
-      name: Authorization
-      description: Token-based authentication with required prefix "Token"
+    jwtAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
