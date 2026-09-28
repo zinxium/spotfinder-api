@@ -1,5 +1,7 @@
 from rest_framework import serializers
+from django.contrib.auth import authenticate
 from django.contrib.auth.models import User
+from django.contrib.auth.password_validation import validate_password
 from .models import Place, Review, Favorite, Category, Visit
 
 # ============================================
@@ -103,6 +105,16 @@ class PlaceSerializer(serializers.ModelSerializer):
         model = Place
         # Affiche tous les champs du modèle
         fields = '__all__'
+        # Le propriétaire est défini par le serveur, la note est calculée à partir des avis
+        read_only_fields = ('owner', 'rating', 'created_at', 'updated_at')
+
+    def validate(self, attrs):
+        """Vérifie que le budget minimum ne dépasse pas le budget maximum"""
+        budget_min = attrs.get('budget_min', getattr(self.instance, 'budget_min', None))
+        budget_max = attrs.get('budget_max', getattr(self.instance, 'budget_max', None))
+        if budget_min is not None and budget_max is not None and budget_min > budget_max:
+            raise serializers.ValidationError({'budget_min': 'Le budget minimum doit être inférieur au budget maximum.'})
+        return attrs
     
     def get_image(self, obj) -> str | None:
         """Retourne l'URL complète de l'image (avec domaine)"""
@@ -166,23 +178,61 @@ class VisitSerializer(serializers.ModelSerializer):
 class RegisterSerializer(serializers.Serializer):
     """Serializer pour l'enregistrement d'un nouvel utilisateur"""
     username = serializers.CharField(max_length=150)
-    email = serializers.EmailField(required=False)
-    password = serializers.CharField(write_only=True, min_length=6)
-    token = serializers.CharField(read_only=True)
-    user_id = serializers.IntegerField(read_only=True)
+    email = serializers.EmailField()
+    password = serializers.CharField(write_only=True, style={'input_type': 'password'})
+
+    def validate_username(self, value):
+        """Le nom d'utilisateur doit être unique (sans tenir compte de la casse)"""
+        if User.objects.filter(username__iexact=value).exists():
+            raise serializers.ValidationError("Ce nom d'utilisateur est déjà pris.")
+        return value
+
+    def validate_email(self, value):
+        """L'email doit être unique (sans tenir compte de la casse)"""
+        value = value.lower()
+        if User.objects.filter(email__iexact=value).exists():
+            raise serializers.ValidationError('Cet email est déjà utilisé.')
+        return value
+
+    def validate(self, attrs):
+        """Applique les règles de mot de passe de Django (AUTH_PASSWORD_VALIDATORS)"""
+        user = User(username=attrs['username'], email=attrs['email'])
+        validate_password(attrs['password'], user=user)
+        return attrs
+
+    def create(self, validated_data):
+        return User.objects.create_user(**validated_data)
 
 
 class LoginSerializer(serializers.Serializer):
     """Serializer pour la connexion"""
     username = serializers.CharField()
-    password = serializers.CharField(write_only=True)
-    token = serializers.CharField(read_only=True)
-    user_id = serializers.IntegerField(read_only=True)
-    email = serializers.EmailField(read_only=True)
+    password = serializers.CharField(write_only=True, style={'input_type': 'password'})
+
+    def validate(self, attrs):
+        """
+        Vérifie les identifiants.
+        Message d'erreur identique que l'utilisateur existe ou non,
+        pour ne pas révéler quels comptes existent.
+        """
+        user = authenticate(
+            request=self.context.get('request'),
+            username=attrs['username'],
+            password=attrs['password'],
+        )
+        if user is None:
+            raise serializers.ValidationError('Identifiants invalides.', code='authorization')
+        attrs['user'] = user
+        return attrs
 
 
 class LogoutSerializer(serializers.Serializer):
-    """Serializer pour la déconnexion"""
-    status = serializers.CharField(read_only=True)
+    """Serializer pour la déconnexion (révoque le refresh token)"""
+    refresh = serializers.CharField(write_only=True)
 
 
+class AuthResponseSerializer(serializers.Serializer):
+    """Réponse de connexion/inscription : utilisateur + tokens JWT"""
+    user = UserSerializer(read_only=True)
+    access = serializers.CharField(read_only=True)
+    refresh = serializers.CharField(read_only=True)
