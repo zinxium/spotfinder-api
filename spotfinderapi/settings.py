@@ -170,17 +170,37 @@ USE_TZ = True
 STATIC_URL = config('STATIC_URL', default='static/')
 STATIC_ROOT = config('STATIC_ROOT', default=BASE_DIR / 'staticfiles')
 
+# ============================================
+# STOCKAGE DES FICHIERS (Django >= 4.2 : réglage STORAGES)
+# ============================================
+# Django 5.1+ ignore DEFAULT_FILE_STORAGE et STATICFILES_STORAGE : sans STORAGES,
+# les images partaient sur le disque local (effacé à chaque déploiement Render)
+# et WhiteNoise ne compressait pas les fichiers statiques.
+USE_CLOUDINARY = config('USE_CLOUDINARY', default=False, cast=bool)
+
+STORAGES = {
+    # Fichiers envoyés par les utilisateurs (images des lieux)
+    'default': {
+        'BACKEND': 'cloudinary_storage.storage.MediaCloudinaryStorage' if USE_CLOUDINARY
+        else 'django.core.files.storage.FileSystemStorage',
+    },
+    # Fichiers statiques (admin, Swagger) servis par WhiteNoise.
+    # En production : compressés et versionnés (nécessite collectstatic).
+    'staticfiles': {
+        'BACKEND': 'django.contrib.staticfiles.storage.StaticFilesStorage' if DEBUG
+        else 'whitenoise.storage.CompressedManifestStaticFilesStorage',
+    },
+}
+
 # Media files configuration
-if config('USE_CLOUDINARY', default=False, cast=bool):
+if USE_CLOUDINARY:
     # Configuration Cloudinary pour le stockage en production
-    import cloudinary_storage
     CLOUDINARY_STORAGE = {
         'CLOUD_NAME': config('CLOUDINARY_CLOUD_NAME'),
         'API_KEY': config('CLOUDINARY_API_KEY'),
         'API_SECRET': config('CLOUDINARY_API_SECRET'),
     }
     CLOUDINARY_URL = config('CLOUDINARY_URL')
-    DEFAULT_FILE_STORAGE = 'cloudinary_storage.storage.MediaCloudinaryStorage'
     MEDIA_URL = config('MEDIA_URL', default='https://res.cloudinary.com/')
 else:
     # Stockage local pour le développement
@@ -263,6 +283,12 @@ CORS_ALLOW_CREDENTIALS = config('CORS_ALLOW_CREDENTIALS', default=False, cast=bo
 if not DEBUG:
     # HTTPS
     SECURE_SSL_REDIRECT = config('SECURE_SSL_REDIRECT', default=True, cast=bool)
+    # Render (comme la plupart des hébergeurs) termine le HTTPS sur son proxy et
+    # transmet la requête en HTTP avec l'en-tête X-Forwarded-Proto. Sans ce réglage,
+    # Django croit la requête non sécurisée et redirige vers https:// en boucle.
+    # À désactiver (TRUST_PROXY_SSL_HEADER=False) si l'API n'est pas derrière un proxy.
+    if config('TRUST_PROXY_SSL_HEADER', default=True, cast=bool):
+        SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
     SESSION_COOKIE_SECURE = config('SESSION_COOKIE_SECURE', default=True, cast=bool)
     CSRF_COOKIE_SECURE = config('CSRF_COOKIE_SECURE', default=True, cast=bool)
     
@@ -276,10 +302,8 @@ if not DEBUG:
     X_FRAME_OPTIONS = config('X_FRAME_OPTIONS', default='DENY')
 
 # ============================================
-# WHITENOISE - Serveur fichiers statiques
+# WHITENOISE - Serveur fichiers statiques (backend défini dans STORAGES)
 # ============================================
-STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
-
 # Optimisation Whitenoise
 WHITENOISE_AUTOREFRESH = config('WHITENOISE_AUTOREFRESH', default=DEBUG, cast=bool)
 
