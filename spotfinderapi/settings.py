@@ -10,9 +10,12 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/6.0/ref/settings/
 """
 
+from datetime import timedelta
 from pathlib import Path
 from decouple import config, Csv
 from django.core.exceptions import ImproperlyConfigured
+
+from spotfinderapi import __version__
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -47,8 +50,8 @@ SECRET_KEY = get_secret('SECRET_KEY', default='django-insecure-dev-key-change-in
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = config('DEBUG', default=False, cast=bool)
 
-# Liste des hôtes autorisés - OBLIGATOIRE en production
-_allowed_hosts = config('ALLOWED_HOSTS', default='*')
+# Liste des hôtes autorisés - OBLIGATOIRE en production (pas de '*' par défaut)
+_allowed_hosts = get_secret('ALLOWED_HOSTS', default='localhost,127.0.0.1')
 ALLOWED_HOSTS = [h.strip() for h in _allowed_hosts.split(',')]
 
 
@@ -62,7 +65,8 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'rest_framework',
-    'rest_framework.authtoken',
+    'rest_framework_simplejwt',
+    'rest_framework_simplejwt.token_blacklist',
     'drf_spectacular',
     'cloudinary_storage',
     'cloudinary',
@@ -137,6 +141,7 @@ AUTH_PASSWORD_VALIDATORS = [
     },
     {
         'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator',
+        'OPTIONS': {'min_length': 8},
     },
     {
         'NAME': 'django.contrib.auth.password_validation.CommonPasswordValidator',
@@ -185,20 +190,50 @@ else:
 # REST Framework Configuration
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': [
-        'rest_framework.authentication.TokenAuthentication',
+        'rest_framework_simplejwt.authentication.JWTAuthentication',
     ],
+    # Sécurisé par défaut : chaque vue publique doit l'autoriser explicitement
     'DEFAULT_PERMISSION_CLASSES': [
-        'rest_framework.permissions.AllowAny',
+        'rest_framework.permissions.IsAuthenticated',
     ],
     'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
+    # Limitation du nombre de requêtes (anti brute-force / abus)
+    'DEFAULT_THROTTLE_CLASSES': [
+        'rest_framework.throttling.AnonRateThrottle',
+        'rest_framework.throttling.UserRateThrottle',
+    ],
+    'DEFAULT_THROTTLE_RATES': {
+        'anon': config('THROTTLE_ANON', default='100/minute'),
+        'user': config('THROTTLE_USER', default='300/minute'),
+        # Connexion, inscription, rafraîchissement du token
+        'auth': config('THROTTLE_AUTH', default='10/minute'),
+    },
+}
+
+# ============================================
+# JWT - Authentification par JSON Web Token
+# ============================================
+SIMPLE_JWT = {
+    # Token d'accès court : limite l'impact d'un vol de token
+    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=config('JWT_ACCESS_MINUTES', default=15, cast=int)),
+    # Token de rafraîchissement : permet de rester connecté sans stocker le mot de passe
+    'REFRESH_TOKEN_LIFETIME': timedelta(days=config('JWT_REFRESH_DAYS', default=7, cast=int)),
+    # Chaque rafraîchissement émet un nouveau refresh token et invalide l'ancien
+    'ROTATE_REFRESH_TOKENS': True,
+    'BLACKLIST_AFTER_ROTATION': True,
+    'UPDATE_LAST_LOGIN': True,
+    'ALGORITHM': 'HS256',
+    'SIGNING_KEY': config('JWT_SIGNING_KEY', default=SECRET_KEY),
+    'AUTH_HEADER_TYPES': ('Bearer',),
 }
 
 # Swagger/OpenAPI Configuration
 SPECTACULAR_SETTINGS = {
     'TITLE': config('API_TITLE', default='SpotFinder API'),
     'DESCRIPTION': config('API_DESCRIPTION', default='API REST pour SpotFinder - Trouvez et partagez vos lieux préférés'),
-    'VERSION': config('API_VERSION', default='1.0.0'),
+    'VERSION': __version__,
     'SERVE_PERMISSIONS': ['rest_framework.permissions.AllowAny'],
+    'SERVE_INCLUDE_SCHEMA': False,
     'CONTACT': {
         'name': config('API_CONTACT_NAME', default='SpotFinder Support'),
         'email': config('API_CONTACT_EMAIL', default='support@spotfinder.com'),
@@ -217,7 +252,8 @@ CORS_ALLOWED_ORIGINS = config(
     cast=lambda x: [origin.strip() for origin in x.split(',')]
 )
 
-CORS_ALLOW_CREDENTIALS = config('CORS_ALLOW_CREDENTIALS', default=True, cast=bool)
+# Le JWT passe par l'en-tête Authorization, pas par des cookies
+CORS_ALLOW_CREDENTIALS = config('CORS_ALLOW_CREDENTIALS', default=False, cast=bool)
 
 # ============================================
 # SÉCURITÉ - PRODUCTION
@@ -247,12 +283,3 @@ STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 # Optimisation Whitenoise
 WHITENOISE_AUTOREFRESH = config('WHITENOISE_AUTOREFRESH', default=DEBUG, cast=bool)
 
-# ============================================
-# DRF-SPECTACULAR - Documentation Swagger
-# ============================================
-SPECTACULAR_SETTINGS = {
-    'TITLE': 'Spotfinder API',
-    'DESCRIPTION': 'API REST pour découvrir et gérer des lieux',
-    'VERSION': '1.0.0',
-    'SERVE_INCLUDE_SCHEMA': False,
-}
