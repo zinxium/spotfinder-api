@@ -6,6 +6,20 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/). Versions : [S
 
 ## [Non publié]
 
+## [1.1.1] - 2026-09-28
+
+### Corrigé
+- **Boucle de redirection HTTPS en production** : derrière le proxy de Render, Django recevait les requêtes en HTTP et redirigeait sans fin vers `https://`. Ajout de `SECURE_PROXY_SSL_HEADER` (désactivable avec `TRUST_PROXY_SSL_HEADER=False`).
+- **Stockage des images** : `DEFAULT_FILE_STORAGE` est ignoré depuis Django 5.1, donc les images partaient sur le disque local même avec `USE_CLOUDINARY=True`, et le disque Render est effacé à chaque déploiement. Passage au réglage `STORAGES`.
+- **Fichiers statiques** : `STATICFILES_STORAGE` également ignoré ; WhiteNoise compresse et versionne de nouveau les fichiers en production
+- `render.yaml` : Python 3.12.7 (Django 6 ne supporte pas 3.11), suppression de l'activation d'un `venv` inexistant sur Render, `runtime` au lieu de `env` (déprécié)
+- Schéma OpenAPI : plus d'avertissements pour la route racine, les favoris et les visites
+
+### Ajouté
+- `.env.example` : `TRUST_PROXY_SSL_HEADER` ; `CORS_ALLOW_CREDENTIALS=False`, aligné sur la valeur par défaut
+- `render.yaml` déclare toutes les variables nécessaires ; `SECRET_KEY` est générée par Render, les secrets restent hors de Git
+- Guide de déploiement : [docs/DEPLOIEMENT.md](docs/DEPLOIEMENT.md)
+
 ## [1.1.0] - 2026-09-28
 
 ### Sécurité
