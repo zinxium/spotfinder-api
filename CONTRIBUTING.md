@@ -55,7 +55,7 @@ Format `MAJEUR.MINEUR.CORRECTIF`, défini à un seul endroit : [`spotfinderapi/_
 1. Mettre à jour `__version__` dans `spotfinderapi/__init__.py`.
 2. Dans [CHANGELOG.md](CHANGELOG.md), renommer la section `[Non publié]` en `[X.Y.Z] - AAAA-MM-JJ`.
 3. Régénérer le schéma OpenAPI : `python manage.py spectacular --file schema.yml`.
-4. Commit `chore(release): vX.Y.Z`, fusion dans `main`, puis tag :
+4. Commit `chore(release): vX.Y.Z` en **dernier commit de la même pull request** (pas besoin de PR séparée), fusion dans `main`, puis, **seulement une fois la PR fusionnée**, tag :
    ```bash
    git tag -a vX.Y.Z -m "vX.Y.Z"
    git push origin vX.Y.Z

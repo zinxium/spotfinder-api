@@ -1,13 +1,36 @@
+# Déploiement Render (Blueprint) - voir docs/DEPLOIEMENT.md
 services:
   - type: web
     name: spotfinder-api
-    env: python
+    runtime: python
     plan: free
-    buildCommand: ". venv/bin/activate && pip install -r requirements.txt && python manage.py collectstatic --noinput && python manage.py migrate"
+    # Render crée lui-même l'environnement Python : pas de venv à activer
+    buildCommand: "pip install -r requirements.txt && python manage.py collectstatic --noinput && python manage.py migrate"
+    # gunicorn écoute automatiquement sur le port fourni par Render ($PORT)
     startCommand: "gunicorn spotfinderapi.wsgi:application"
     numInstances: 1
     envVars:
-      - key: DEBUG
-        value: false
+      # Django 6 exige Python >= 3.12 (identique à .python-version)
       - key: PYTHON_VERSION
-        value: "3.11"
+        value: "3.12.7"
+      - key: DEBUG
+        value: "False"
+      # Générée par Render à la création du service
+      - key: SECRET_KEY
+        generateValue: true
+      # Valeurs à saisir dans le tableau de bord Render (jamais dans Git)
+      - key: ALLOWED_HOSTS
+        sync: false
+      - key: DATABASE_URL
+        sync: false
+      # Obligatoire en production : le disque Render est effacé à chaque déploiement
+      - key: USE_CLOUDINARY
+        value: "True"
+      - key: CLOUDINARY_CLOUD_NAME
+        sync: false
+      - key: CLOUDINARY_API_KEY
+        sync: false
+      - key: CLOUDINARY_API_SECRET
+        sync: false
+      - key: CLOUDINARY_URL
+        sync: false

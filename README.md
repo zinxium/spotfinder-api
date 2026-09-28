@@ -22,7 +22,8 @@ Construite avec **Django 6** et **Django REST Framework**, authentification **JW
 6. [Droits d'accès](#droits-daccès)
 7. [Tests](#tests)
 8. [Structure du projet](#structure-du-projet)
-9. [Contribuer et versionner](#contribuer-et-versionner)
+9. [Déploiement](#déploiement)
+10. [Contribuer et versionner](#contribuer-et-versionner)
 
 ---
 
@@ -170,6 +171,10 @@ spotfinder-api/
 ├── CHANGELOG.md            # Historique des versions
 └── CONTRIBUTING.md         # Branches, commits, versions
 ```
+
+## Déploiement
+
+Déploiement sur Render via [`render.yaml`](render.yaml). Guide pas à pas, variables et vérifications : **[docs/DEPLOIEMENT.md](docs/DEPLOIEMENT.md)**.
 
 ## Contribuer et versionner
 

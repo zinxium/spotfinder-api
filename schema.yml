@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: SpotFinder API
-  version: 1.1.0
+  version: 1.1.1
   description: API REST pour SpotFinder - Trouvez et partagez vos lieux préférés
   contact:
     name: SpotFinder Support
@@ -21,7 +21,11 @@ paths:
       - {}
       responses:
         '200':
-          description: No response body
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Root'
+          description: ''
   /api/auth/login/:
     post:
       operationId: api_auth_login_create
@@ -377,7 +381,8 @@ paths:
       - in: path
         name: id
         schema:
-          type: string
+          type: integer
+        description: A unique integer value identifying this favorite.
         required: true
       tags:
       - Favorites
@@ -400,7 +405,8 @@ paths:
       - in: path
         name: id
         schema:
-          type: string
+          type: integer
+        description: A unique integer value identifying this favorite.
         required: true
       tags:
       - Favorites
@@ -435,7 +441,8 @@ paths:
       - in: path
         name: id
         schema:
-          type: string
+          type: integer
+        description: A unique integer value identifying this favorite.
         required: true
       tags:
       - Favorites
@@ -469,7 +476,8 @@ paths:
       - in: path
         name: id
         schema:
-          type: string
+          type: integer
+        description: A unique integer value identifying this favorite.
         required: true
       tags:
       - Favorites
@@ -1325,7 +1333,8 @@ paths:
       - in: path
         name: id
         schema:
-          type: string
+          type: integer
+        description: A unique integer value identifying this visit.
         required: true
       tags:
       - Visits
@@ -1348,7 +1357,8 @@ paths:
       - in: path
         name: id
         schema:
-          type: string
+          type: integer
+        description: A unique integer value identifying this visit.
         required: true
       tags:
       - Visits
@@ -1383,7 +1393,8 @@ paths:
       - in: path
         name: id
         schema:
-          type: string
+          type: integer
+        description: A unique integer value identifying this visit.
         required: true
       tags:
       - Visits
@@ -1417,7 +1428,8 @@ paths:
       - in: path
         name: id
         schema:
-          type: string
+          type: integer
+        description: A unique integer value identifying this visit.
         required: true
       tags:
       - Visits
@@ -2032,6 +2044,16 @@ components:
       - updated_at
       - user_id
       - username
+    Root:
+      type: object
+      properties:
+        message:
+          type: string
+        docs:
+          type: string
+      required:
+      - docs
+      - message
     TokenRefresh:
       type: object
       properties:
