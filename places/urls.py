@@ -2,7 +2,7 @@ from rest_framework import routers
 from django.urls import path
 from .views import (
     PlaceViewSet, UserViewSet, CategoryViewSet, ReviewViewSet, 
-    FavoriteViewSet, VisitViewSet, register, login, logout
+    FavoriteViewSet, VisitViewSet, register, login, logout, TokenRefresh
 )
 
 # ============================================
@@ -43,18 +43,24 @@ router.register(r'visits', VisitViewSet, basename='visit')
 urlpatterns = [
     # Création d'un compte
     # POST /api/auth/register/
-    # Données: {"username": "john", "email": "john@example.com", "password": "123456"}
+    # Données: {"username": "john", "email": "john@example.com", "password": "..."}
     path('auth/register/', register, name='register'),
     
     # Connexion
     # POST /api/auth/login/
-    # Données: {"username": "john", "password": "123456"}
-    # Retour: Token d'authentification
+    # Données: {"username": "john", "password": "..."}
+    # Retour: {"user": {...}, "access": "...", "refresh": "..."}
     path('auth/login/', login, name='login'),
     
-    # Déconnexion
+    # Renouvellement du token d'accès (rotation du refresh token)
+    # POST /api/auth/refresh/
+    # Données: {"refresh": "..."}
+    path('auth/refresh/', TokenRefresh.as_view(), name='token_refresh'),
+    
+    # Déconnexion (révocation du refresh token)
     # POST /api/auth/logout/
-    # Authentification requise: Token
+    # Authentification requise: Authorization: Bearer <access>
+    # Données: {"refresh": "..."}
     path('auth/logout/', logout, name='logout'),
 ] + router.urls
 
