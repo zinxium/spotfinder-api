@@ -1,16 +1,21 @@
 from django.shortcuts import render
 from rest_framework import viewsets, status
+from rest_framework.exceptions import ValidationError
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from rest_framework.decorators import api_view
-from rest_framework.authtoken.models import Token
-from rest_framework.permissions import IsAuthenticated, AllowAny, IsAuthenticatedOrReadOnly
+from rest_framework.decorators import api_view, permission_classes, throttle_classes
+from rest_framework.permissions import IsAuthenticated, AllowAny
+from rest_framework.throttling import SimpleRateThrottle
+from rest_framework_simplejwt.exceptions import TokenError
+from rest_framework_simplejwt.tokens import RefreshToken
+from rest_framework_simplejwt.views import TokenRefreshView
 from rest_framework.pagination import PageNumberPagination
 from django.contrib.auth.models import User
 from django.db.models import Q, Avg
 from drf_spectacular.utils import extend_schema_view, extend_schema
 from .models import Place, Review, Favorite, Category, Visit
-from .serializers import PlaceSerializer, ReviewSerializer, FavoriteSerializer, UserSerializer, CategorySerializer, VisitSerializer, RegisterSerializer, LoginSerializer, LogoutSerializer
+from .serializers import PlaceSerializer, ReviewSerializer, FavoriteSerializer, UserSerializer, CategorySerializer, VisitSerializer, RegisterSerializer, LoginSerializer, LogoutSerializer, AuthResponseSerializer
+from .permissions import IsAdminOrReadOnly, IsOwnerOrReadOnly
 
 
 # ============================================
@@ -54,7 +59,7 @@ class CategoryViewSet(viewsets.ModelViewSet):
     serializer_class = CategorySerializer
     
     # Permissions : n'importe qui peut lire, seul admin peut modifier
-    permission_classes = [AllowAny]
+    permission_classes = [IsAdminOrReadOnly]
     
     # Ajoute la pagination
     pagination_class = StandardResultsSetPagination
@@ -79,8 +84,9 @@ class ReviewViewSet(viewsets.ModelViewSet):
     """
     serializer_class = ReviewSerializer
     
-    # Permissions : lecture publique, création authentifiée
-    permission_classes = [IsAuthenticatedOrReadOnly]
+    # Permissions : lecture publique, création authentifiée, modification par l'auteur
+    permission_classes = [IsOwnerOrReadOnly]
+    owner_field = 'user'
     
     # Ajoute la pagination
     pagination_class = StandardResultsSetPagination
@@ -101,6 +107,9 @@ class ReviewViewSet(viewsets.ModelViewSet):
     
     def perform_create(self, serializer):
         """Quand un avis est créé, associe l'utilisateur actuel"""
+        # Un seul avis par utilisateur et par place (évite une erreur 500 d'intégrité)
+        if Review.objects.filter(user=self.request.user, place=serializer.validated_data['place']).exists():
+            raise ValidationError({'place': 'Vous avez déjà laissé un avis sur ce lieu.'})
         serializer.save(user=self.request.user)
 
 
@@ -136,6 +145,9 @@ class FavoriteViewSet(viewsets.ModelViewSet):
     
     def perform_create(self, serializer):
         """Quand un favori est créé, associe l'utilisateur actuel"""
+        # Une place ne peut être qu'une fois en favori (évite une erreur 500 d'intégrité)
+        if Favorite.objects.filter(user=self.request.user, place=serializer.validated_data['place']).exists():
+            raise ValidationError({'place': 'Ce lieu est déjà dans vos favoris.'})
         serializer.save(user=self.request.user)
     
     @action(detail=False, methods=['post'])
@@ -194,6 +206,13 @@ class UserViewSet(viewsets.ModelViewSet):
     # Ajoute la pagination
     pagination_class = StandardResultsSetPagination
     
+    def create(self, request, *args, **kwargs):
+        """Les comptes se créent via /api/auth/register/ (avec validation du mot de passe)"""
+        return Response(
+            {'detail': 'Utilisez /api/auth/register/ pour créer un compte.'},
+            status=status.HTTP_405_METHOD_NOT_ALLOWED
+        )
+    
     def get_queryset(self):
         """Les utilisateurs ne voient que leur propre profil, sauf les admins"""
         # Si c'est un administrateur, affiche tous les utilisateurs
@@ -242,15 +261,21 @@ class PlaceViewSet(viewsets.ModelViewSet):
     - Lecture publique : tout le monde peut voir les places
     - Création/Modification : seuls les utilisateurs authentifiés
     """
-    queryset = Place.objects.all()
+    queryset = Place.objects.all().order_by('-created_at')
     
     serializer_class = PlaceSerializer
     
-    # Permissions : lecture publique, modification authentifiée
-    permission_classes = [IsAuthenticatedOrReadOnly]
+    # Permissions : lecture publique, création authentifiée, modification par le propriétaire
+    permission_classes = [IsOwnerOrReadOnly]
     
     # Ajoute la pagination
     pagination_class = StandardResultsSetPagination
+
+    def get_permissions(self):
+        """Réserver, noter ou mettre en favori : tout utilisateur connecté (pas seulement le propriétaire)"""
+        if self.action in ('book', 'add_review', 'favorite'):
+            return [IsAuthenticated()]
+        return super().get_permissions()
 
     def perform_create(self, serializer):
         """Quand une place est créée, associe l'utilisateur actuel comme propriétaire"""
@@ -284,37 +309,31 @@ class PlaceViewSet(viewsets.ModelViewSet):
         Met à jour automatiquement la note moyenne de la place.
         """
         place = self.get_object()
-        try:
-            data = request.data
-            rating = data.get('rating')
-            comment = data.get('comment')
-            
-            # Valide les données
-            if not rating or not comment:
-                return Response(
-                    {'error': 'Rating and comment are required'},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-            
-            # Crée ou met à jour l'avis (un avis par utilisateur par place)
-            review, created = Review.objects.update_or_create(
-                place=place,
-                user=request.user,
-                defaults={'rating': rating, 'comment': comment}
-            )
-            
-            # Recalcule la note moyenne de la place
-            avg_rating = Review.objects.filter(place=place).aggregate(Avg('rating'))['rating__avg']
-            if avg_rating:
-                place.rating = round(avg_rating, 2)
-                place.save()
-            
-            # Retourne l'avis créé/modifié
-            serializer = ReviewSerializer(review, context={'request': request})
-            status_code = status.HTTP_201_CREATED if created else status.HTTP_200_OK
-            return Response(serializer.data, status=status_code)
-        except Exception as e:
-            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Valide la note (1 à 5) et le commentaire
+        input_serializer = ReviewSerializer(data={**request.data, 'place': place.id})
+        input_serializer.is_valid(raise_exception=True)
+        
+        # Crée ou met à jour l'avis (un avis par utilisateur par place)
+        review, created = Review.objects.update_or_create(
+            place=place,
+            user=request.user,
+            defaults={
+                'rating': input_serializer.validated_data['rating'],
+                'comment': input_serializer.validated_data['comment'],
+            }
+        )
+        
+        # Recalcule la note moyenne de la place
+        avg_rating = Review.objects.filter(place=place).aggregate(Avg('rating'))['rating__avg']
+        if avg_rating:
+            place.rating = round(avg_rating, 2)
+            place.save(update_fields=['rating'])
+        
+        # Retourne l'avis créé/modifié
+        serializer = ReviewSerializer(review, context={'request': request})
+        status_code = status.HTTP_201_CREATED if created else status.HTTP_200_OK
+        return Response(serializer.data, status=status_code)
 
     @action(detail=True, methods=['get'])
     def reviews(self, request, pk=None):
@@ -423,16 +442,36 @@ class PlaceViewSet(viewsets.ModelViewSet):
         return Response(serializer.data)
 
 
+def _auth_response(user, status_code):
+    """Construit la réponse commune à l'inscription et à la connexion : profil + tokens JWT"""
+    refresh = RefreshToken.for_user(user)
+    return Response({
+        'user': UserSerializer(user).data,
+        'access': str(refresh.access_token),
+        'refresh': str(refresh),
+    }, status=status_code)
+
+
+class AuthRateThrottle(SimpleRateThrottle):
+    """Limite les tentatives de connexion/inscription par adresse IP (voir THROTTLE_AUTH)"""
+    scope = 'auth'
+
+    def get_cache_key(self, request, view):
+        return self.cache_format % {'scope': self.scope, 'ident': self.get_ident(request)}
+
+
 # ============================================
 # VUE: Register (Créer un compte)
 # ============================================
 @extend_schema(
     tags=["Authentication"],
-    description="Créer un nouvel utilisateur et obtenir un token d'authentification.",
+    description="Créer un nouvel utilisateur et obtenir ses tokens JWT (access + refresh).",
     request=RegisterSerializer,
-    responses={201: RegisterSerializer, 400: {}}
+    responses={201: AuthResponseSerializer, 400: {}}
 )
 @api_view(['POST'])
+@permission_classes([AllowAny])
+@throttle_classes([AuthRateThrottle])
 def register(request):
     """
     Endpoint pour créer un nouvel utilisateur.
@@ -441,53 +480,15 @@ def register(request):
     Données requises: {
         "username": "john_doe",
         "email": "john@example.com",
-        "password": "secure_password_123"
+        "password": "un_mot_de_passe_solide"
     }
     
-    Retour: Token d'authentification pour l'utilisateur créé
+    Retour: {"user": {...}, "access": "...", "refresh": "..."}
     """
-    try:
-        data = request.data
-        username = data.get('username')
-        email = data.get('email')
-        password = data.get('password')
-        
-        # Vérifie que username et password sont fournis
-        if not username or not password:
-            return Response(
-                {'error': 'Username and password are required'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        
-        # Vérifie que le username n'existe pas déjà
-        if User.objects.filter(username=username).exists():
-            return Response(
-                {'error': 'Username already exists'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        
-        # Crée le nouvel utilisateur
-        user = User.objects.create_user(
-            username=username,
-            email=email,
-            password=password
-        )
-        
-        # Génère un token d'authentification pour cet utilisateur
-        token, created = Token.objects.get_or_create(user=user)
-        
-        # Retourne les infos de l'utilisateur et son token
-        return Response({
-            'user_id': user.id,
-            'username': user.username,
-            'email': user.email,
-            'token': token.key
-        }, status=status.HTTP_201_CREATED)
-    except Exception as e:
-        return Response(
-            {'error': str(e)},
-            status=status.HTTP_400_BAD_REQUEST
-        )
+    serializer = RegisterSerializer(data=request.data)
+    serializer.is_valid(raise_exception=True)
+    user = serializer.save()
+    return _auth_response(user, status.HTTP_201_CREATED)
 
 
 # ============================================
@@ -495,65 +496,44 @@ def register(request):
 # ============================================
 @extend_schema(
     tags=["Authentication"],
-    description="Se connecter et obtenir un token d'authentification.",
+    description="Se connecter et obtenir les tokens JWT (access + refresh).",
     request=LoginSerializer,
-    responses={200: LoginSerializer, 401: {}, 404: {}}
+    responses={200: AuthResponseSerializer, 400: {}}
 )
 @api_view(['POST'])
+@permission_classes([AllowAny])
+@throttle_classes([AuthRateThrottle])
 def login(request):
     """
-    Endpoint pour se connecter et obtenir un token.
+    Endpoint pour se connecter.
     
     Usage: POST /api/auth/login/
     Données requises: {
         "username": "john_doe",
-        "password": "secure_password_123"
+        "password": "un_mot_de_passe_solide"
     }
     
-    Retour: Token d'authentification
+    Retour: {"user": {...}, "access": "...", "refresh": "..."}
+    Le token d'accès s'envoie dans l'en-tête: Authorization: Bearer <access>
     """
-    try:
-        data = request.data
-        username = data.get('username')
-        password = data.get('password')
-        
-        # Vérifie que username et password sont fournis
-        if not username or not password:
-            return Response(
-                {'error': 'Username and password are required'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        
-        # Récupère l'utilisateur
-        user = User.objects.get(username=username)
-        
-        # Vérifie que le mot de passe est correct
-        if not user.check_password(password):
-            return Response(
-                {'error': 'Invalid credentials'},
-                status=status.HTTP_401_UNAUTHORIZED
-            )
-        
-        # Récupère ou crée le token de l'utilisateur
-        token, created = Token.objects.get_or_create(user=user)
-        
-        # Retourne les infos et le token
-        return Response({
-            'user_id': user.id,
-            'username': user.username,
-            'email': user.email,
-            'token': token.key
-        }, status=status.HTTP_200_OK)
-    except User.DoesNotExist:
-        return Response(
-            {'error': 'User not found'},
-            status=status.HTTP_404_NOT_FOUND
-        )
-    except Exception as e:
-        return Response(
-            {'error': str(e)},
-            status=status.HTTP_400_BAD_REQUEST
-        )
+    serializer = LoginSerializer(data=request.data, context={'request': request})
+    serializer.is_valid(raise_exception=True)
+    return _auth_response(serializer.validated_data['user'], status.HTTP_200_OK)
+
+
+# ============================================
+# VUE: Refresh (Renouveler le token d'accès)
+# ============================================
+@extend_schema(
+    tags=["Authentication"],
+    description="Échanger un refresh token contre un nouveau couple access/refresh. L'ancien refresh token est révoqué.",
+)
+class TokenRefresh(TokenRefreshView):
+    """
+    Usage: POST /api/auth/refresh/ avec {"refresh": "..."}
+    Retour: {"access": "...", "refresh": "..."}
+    """
+    throttle_classes = [AuthRateThrottle]
 
 
 # ============================================
@@ -561,37 +541,35 @@ def login(request):
 # ============================================
 @extend_schema(
     tags=["Authentication"],
-    description="Se déconnecter et supprimer le token d'authentification.",
-    responses={200: LogoutSerializer, 401: {}}
+    description="Se déconnecter : révoque le refresh token fourni.",
+    request=LogoutSerializer,
+    responses={205: None, 400: {}, 401: {}}
 )
 @api_view(['POST'])
+@permission_classes([IsAuthenticated])
 def logout(request):
     """
     Endpoint pour se déconnecter.
-    Supprime le token d'authentification.
+    Révoque (blacklist) le refresh token : il ne pourra plus être utilisé.
+    Le token d'accès expire de lui-même au bout de quelques minutes.
     
-    Usage: POST /api/auth/logout/
-    Authentification requise: Token dans le header
+    Usage: POST /api/auth/logout/ avec {"refresh": "..."}
+    Authentification requise: Authorization: Bearer <access>
     """
+    serializer = LogoutSerializer(data=request.data)
+    serializer.is_valid(raise_exception=True)
     try:
-        # Vérifie que l'utilisateur est authentifié
-        if request.user.is_authenticated:
-            # Supprime le token de cet utilisateur
-            Token.objects.filter(user=request.user).delete()
-            return Response(
-                {'status': 'Successfully logged out'},
-                status=status.HTTP_200_OK
-            )
-        else:
-            return Response(
-                {'error': 'Not authenticated'},
-                status=status.HTTP_401_UNAUTHORIZED
-            )
-    except Exception as e:
+        token = RefreshToken(serializer.validated_data['refresh'])
+        # Empêche de révoquer le token d'un autre utilisateur
+        if str(token.get('user_id')) != str(request.user.id):
+            raise TokenError('Token does not belong to user')
+        token.blacklist()
+    except TokenError:
         return Response(
-            {'error': str(e)},
+            {'detail': 'Token invalide ou expiré.'},
             status=status.HTTP_400_BAD_REQUEST
         )
+    return Response(status=status.HTTP_205_RESET_CONTENT)
 
 
 # ============================================

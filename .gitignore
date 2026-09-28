@@ -304,3 +304,6 @@ Temporary Items
 .nfs*
 
 docu/
+# Base de données locale (contient des comptes et hash de mots de passe)
+db.sqlite3
+*.sqlite3
