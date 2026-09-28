@@ -4,7 +4,9 @@ Toutes les modifications notables de l'API SpotFinder sont consignées ici.
 
 Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/). Versions : [Semantic Versioning](https://semver.org/lang/fr/). Règles détaillées dans [CONTRIBUTING.md](CONTRIBUTING.md).
 
-## [Non publié] - 1.1.0
+## [Non publié]
+
+## [1.1.0] - 2026-09-28
 
 ### Sécurité
 - **Authentification JWT** (djangorestframework-simplejwt) à la place des tokens DRF : token d'accès de 15 min, refresh token de 7 jours, rotation et révocation (blacklist) à chaque rafraîchissement
