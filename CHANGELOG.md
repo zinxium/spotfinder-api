@@ -6,6 +6,10 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/). Versions : [S
 
 ## [Non publié]
 
+### Modifié
+- Flux Git : branche d'intégration `dev` (les branches de travail y sont fusionnées), `main` reçoit `dev` quand tout est fonctionnel
+- CI (tests Django et revue des dépendances) déclenchée aussi sur `dev`
+
 ## [1.1.1] - 2026-09-28
 
 ### Corrigé
