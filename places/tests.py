@@ -55,6 +55,24 @@ class AuthTests(BaseAPITestCase):
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertFalse(User.objects.filter(username='carol').exists())
 
+    def test_register_password_errors_are_attached_to_password_field(self):
+        # Le client mobile affiche l'erreur sous le champ concerné
+        response = self.client.post('/api/auth/register/', {
+            'username': 'carol', 'email': 'carol@example.com', 'password': 'password123',
+        }, format='json')
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('password', response.data)
+        self.assertNotIn('non_field_errors', response.data)
+
+    def test_validation_messages_are_in_french(self):
+        response = self.client.post('/api/auth/register/', {
+            'username': 'carol', 'email': 'carol@example.com', 'password': 'password123',
+        }, format='json')
+        self.assertIn('Ce mot de passe est trop courant.', response.data['password'])
+        # Messages intégrés de DRF également traduits
+        response = self.client.post('/api/auth/register/', {}, format='json')
+        self.assertEqual(response.data['username'], ['Ce champ est obligatoire.'])
+
     def test_register_rejects_duplicate_username_and_email(self):
         response = self.client.post('/api/auth/register/', {
             'username': 'ALICE', 'email': 'Alice@Example.com', 'password': PASSWORD,
