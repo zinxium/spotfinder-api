@@ -155,7 +155,8 @@ AUTH_PASSWORD_VALIDATORS = [
 # Internationalization
 # https://docs.djangoproject.com/en/6.0/topics/i18n/
 
-LANGUAGE_CODE = config('LANGUAGE_CODE', default='en-us')
+# Langue des messages d'erreur (validation Django et DRF) renvoyés aux clients
+LANGUAGE_CODE = config('LANGUAGE_CODE', default='fr')
 
 TIME_ZONE = config('TIME_ZONE', default='UTC')
 
