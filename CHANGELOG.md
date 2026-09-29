@@ -9,6 +9,10 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/). Versions : [S
 ### Modifié
 - Flux Git : branche d'intégration `dev` (les branches de travail y sont fusionnées), `main` reçoit `dev` quand tout est fonctionnel
 - CI (tests Django et revue des dépendances) déclenchée aussi sur `dev`
+- ⚠️ Messages d'erreur en **français** par défaut (`LANGUAGE_CODE=fr`) : validation Django et DRF, et la plupart des messages JWT (quelques-uns restent en anglais, faute de traduction dans simplejwt)
+
+### Corrigé
+- Inscription : les erreurs de mot de passe (trop court, trop courant…) sont rattachées au champ `password` au lieu de `non_field_errors`, pour être affichées sous le bon champ dans l'application
 
 ## [1.1.1] - 2026-09-28
 

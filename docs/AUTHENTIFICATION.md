@@ -48,7 +48,7 @@ Content-Type: application/json
 ```
 
 - `201` → `{"user": {"id", "username", "email", "first_name", "last_name"}, "access", "refresh"}`
-- `400` → erreurs par champ, par exemple `{"password": ["Ce mot de passe est trop courant."]}`
+- `400` → erreurs **par champ**, en français, par exemple `{"password": ["Ce mot de passe est trop courant."]}`. Les règles de mot de passe sont toujours renvoyées sous `password`.
 
 Règles appliquées :
 - email obligatoire ;

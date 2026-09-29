@@ -80,6 +80,7 @@ Toutes les variables se trouvent dans [`.env.example`](.env.example). Les princi
 | `THROTTLE_AUTH` | Limite connexion / inscription / refresh par IP | `10/minute` |
 | `THROTTLE_ANON`, `THROTTLE_USER` | Limites globales | `100/minute`, `300/minute` |
 | `CORS_ALLOWED_ORIGINS` | Origines web autorisées | `http://localhost:3000,...` |
+| `LANGUAGE_CODE` | Langue des messages d'erreur renvoyés | `fr` |
 | `USE_CLOUDINARY` + `CLOUDINARY_*` | Stockage des images sur Cloudinary | `False` |
 
 **Principe fail-fast :** avec `DEBUG=False`, l'application refuse de démarrer si une variable obligatoire manque, plutôt que d'utiliser une valeur par défaut dangereuse.

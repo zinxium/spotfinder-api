@@ -2,6 +2,7 @@ from rest_framework import serializers
 from django.contrib.auth import authenticate
 from django.contrib.auth.models import User
 from django.contrib.auth.password_validation import validate_password
+from django.core.exceptions import ValidationError as DjangoValidationError
 from .models import Place, Review, Favorite, Category, Visit
 
 # ============================================
@@ -195,9 +196,16 @@ class RegisterSerializer(serializers.Serializer):
         return value
 
     def validate(self, attrs):
-        """Applique les règles de mot de passe de Django (AUTH_PASSWORD_VALIDATORS)"""
+        """
+        Applique les règles de mot de passe de Django (AUTH_PASSWORD_VALIDATORS).
+        Les erreurs sont rattachées au champ "password" pour que le client
+        puisse les afficher sous ce champ.
+        """
         user = User(username=attrs['username'], email=attrs['email'])
-        validate_password(attrs['password'], user=user)
+        try:
+            validate_password(attrs['password'], user=user)
+        except DjangoValidationError as error:
+            raise serializers.ValidationError({'password': list(error.messages)})
         return attrs
 
     def create(self, validated_data):
