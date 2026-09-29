@@ -4,7 +4,11 @@ Ce document fixe les règles de versionnage du code. Elles s'appliquent **à cha
 
 ## 1. Branches
 
-`main` contient toujours du code stable et déployable. On ne commite jamais directement dessus.
+| Branche | Rôle |
+|---|---|
+| `main` | Production : uniquement du code **complet et fonctionnel**, reçu depuis `dev`. Jamais de commit direct. |
+| `dev` | Intégration : toutes les branches de travail y sont fusionnées, même en cours d'avancement |
+| Branches de travail | Créées depuis `dev`, préfixées selon le tableau ci-dessous |
 
 | Préfixe | Usage | Exemple |
 |---|---|---|
@@ -14,7 +18,18 @@ Ce document fixe les règles de versionnage du code. Elles s'appliquent **à cha
 | `docs/` | Documentation uniquement | `docs/api-endpoints` |
 | `chore/` | Maintenance, dépendances, CI | `chore/upgrade-django` |
 
-Flux de travail : branche depuis `main`, commits, pull request, CI verte, relecture, fusion dans `main`, puis tag de version si c'est une release.
+Flux de travail :
+
+```
+feat/ma-fonctionnalite ──PR──▶ dev ──(quand tout fonctionne)──PR──▶ main ──▶ tag vX.Y.Z
+```
+
+1. Créer la branche depuis `dev` : `git checkout dev`, `git pull`, `git checkout -b feat/…`
+2. Commits, push, puis pull request **vers `dev`**
+3. CI verte, puis fusion dans `dev`
+4. Quand `dev` est stable et complet : pull request `dev` → `main`, fusion, puis tag de version
+
+La CI (tests Django et revue des dépendances) tourne sur `dev` et sur `main`.
 
 ## 2. Messages de commit : Conventional Commits
 
@@ -55,7 +70,7 @@ Format `MAJEUR.MINEUR.CORRECTIF`, défini à un seul endroit : [`spotfinderapi/_
 1. Mettre à jour `__version__` dans `spotfinderapi/__init__.py`.
 2. Dans [CHANGELOG.md](CHANGELOG.md), renommer la section `[Non publié]` en `[X.Y.Z] - AAAA-MM-JJ`.
 3. Régénérer le schéma OpenAPI : `python manage.py spectacular --file schema.yml`.
-4. Commit `chore(release): vX.Y.Z` en **dernier commit de la même pull request** (pas besoin de PR séparée), fusion dans `main`, puis, **seulement une fois la PR fusionnée**, tag :
+4. Commit `chore(release): vX.Y.Z` en **dernier commit de la pull request `dev` → `main`**, fusion dans `main`, puis, **seulement une fois la PR fusionnée**, tag :
    ```bash
    git tag -a vX.Y.Z -m "vX.Y.Z"
    git push origin vX.Y.Z
