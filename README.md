@@ -149,7 +149,7 @@ Les tests couvrent l'authentification JWT et tous les droits d'accès ci-dessus.
 python manage.py test places
 ```
 
-Ils tournent aussi automatiquement sur GitHub Actions à chaque push et pull request vers `main` (voir [`.github/workflows/django.yml`](.github/workflows/django.yml)).
+Ils tournent aussi automatiquement sur GitHub Actions à chaque push et pull request vers `dev` et `main` (voir [`.github/workflows/django.yml`](.github/workflows/django.yml)).
 
 ## Structure du projet
 
