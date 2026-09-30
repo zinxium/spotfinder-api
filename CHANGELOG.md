@@ -13,7 +13,7 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/). Versions : [S
 ### Modifié
 - Flux Git : branche d'intégration `dev` (les branches de travail y sont fusionnées), `main` reçoit `dev` quand tout est fonctionnel
 - CI (tests Django et revue des dépendances) déclenchée aussi sur `dev`
-- ⚠️ Messages d'erreur en **français** par défaut (`LANGUAGE_CODE=fr`) : validation Django et DRF, et la plupart des messages JWT (quelques-uns restent en anglais, faute de traduction dans simplejwt)
+- Messages d'erreur en **français** par défaut (`LANGUAGE_CODE=fr`) : validation Django et DRF, et la plupart des messages JWT (quelques-uns restent en anglais, faute de traduction dans simplejwt)
 
 ### Corrigé
 - Inscription : les erreurs de mot de passe (trop court, trop courant…) sont rattachées au champ `password` au lieu de `non_field_errors`, pour être affichées sous le bon champ dans l'application
@@ -56,8 +56,8 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/). Versions : [S
 - Documentation : README restructuré, [docs/AUTHENTIFICATION.md](docs/AUTHENTIFICATION.md), [CONTRIBUTING.md](CONTRIBUTING.md)
 
 ### Modifié
-- ⚠️ **Incompatible** : `register` et `login` renvoient `{"user", "access", "refresh"}` au lieu de `{"user_id", "username", "email", "token"}` ; l'en-tête devient `Authorization: Bearer <access>`
-- ⚠️ **Incompatible** : `logout` attend `{"refresh": "..."}` et répond `205`
+- **Incompatible** : `register` et `login` renvoient `{"user", "access", "refresh"}` au lieu de `{"user_id", "username", "email", "token"}` ; l'en-tête devient `Authorization: Bearer <access>`
+- **Incompatible** : `logout` attend `{"refresh": "..."}` et répond `205`
 - `register` : email obligatoire, nom d'utilisateur et email uniques sans tenir compte de la casse
 - CI : Python 3.12 (Django 6 ne supporte pas 3.7 à 3.9)
 - Les listes de lieux sont triées par date de création décroissante (pagination stable)
