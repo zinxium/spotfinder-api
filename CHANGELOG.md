@@ -6,6 +6,9 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/). Versions : [S
 
 ## [Non publié]
 
+### Ajouté
+- `GET /api/favorites/` : chaque favori inclut `place_details`, le lieu complet au même format que `/api/places/{id}/`. L'application affiche ainsi la liste des favoris sans une requête par lieu. Champs existants inchangés (rétrocompatible).
+
 ### Modifié
 - Flux Git : branche d'intégration `dev` (les branches de travail y sont fusionnées), `main` reçoit `dev` quand tout est fonctionnel
 - CI (tests Django et revue des dépendances) déclenchée aussi sur `dev`
