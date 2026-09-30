@@ -1,7 +1,10 @@
+from io import StringIO
 from unittest.mock import patch
 
 from django.contrib.auth.models import User
 from django.core.cache import cache
+from django.core.management import CommandError, call_command
+from django.test import override_settings
 from rest_framework import status
 from rest_framework.test import APITestCase
 
@@ -230,3 +233,51 @@ class PermissionTests(BaseAPITestCase):
         self.assertEqual(details['city'], 'Cotonou')
         self.assertEqual(details['category'], 'restaurant')
         self.assertTrue(details['is_favorite'])
+
+
+# ============================================
+# TESTS: Données de démonstration (manage.py seed_demo)
+# ============================================
+class SeedDemoTests(APITestCase):
+    def run_seed(self, *args):
+        out = StringIO()
+        call_command('seed_demo', *args, stdout=out)
+        return out.getvalue()
+
+    @override_settings(DEBUG=True)
+    def test_creates_demo_account_and_places(self):
+        output = self.run_seed('--password', PASSWORD)
+        user = User.objects.get(username='demo')
+        self.assertTrue(user.check_password(PASSWORD))
+        self.assertFalse(user.is_staff)
+        self.assertGreaterEqual(Place.objects.count(), 6)
+        self.assertTrue(Review.objects.exists())
+        self.assertIn('demo', output)
+        # Mot de passe choisi : jamais réaffiché
+        self.assertNotIn(PASSWORD, output)
+
+    @override_settings(DEBUG=True)
+    def test_generates_and_prints_a_strong_password_when_none_given(self):
+        output = self.run_seed()
+        password = output.split('Mot de passe : ')[1].split()[0]
+        self.assertGreaterEqual(len(password), 16)
+        self.assertTrue(User.objects.get(username='demo').check_password(password))
+
+    @override_settings(DEBUG=True)
+    def test_is_idempotent(self):
+        self.run_seed('--password', PASSWORD)
+        places = Place.objects.count()
+        self.run_seed('--password', PASSWORD)
+        self.assertEqual(Place.objects.count(), places)
+        self.assertEqual(User.objects.filter(username='demo').count(), 1)
+
+    @override_settings(DEBUG=True)
+    def test_rejects_weak_password(self):
+        with self.assertRaises(CommandError):
+            self.run_seed('--password', '123456')
+
+    @override_settings(DEBUG=False)
+    def test_refuses_to_run_in_production(self):
+        with self.assertRaises(CommandError):
+            self.run_seed('--password', PASSWORD)
+        self.assertFalse(User.objects.filter(username='demo').exists())

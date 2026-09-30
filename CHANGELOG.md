@@ -7,6 +7,7 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/). Versions : [S
 ## [Non publié]
 
 ### Ajouté
+- Commande `python manage.py seed_demo` : compte `demo` (mot de passe généré et affiché une fois, ou `--password`), 8 lieux et 6 avis de démonstration ; refusée si `DEBUG=False`, sans doublons si relancée (5 tests)
 - `GET /api/favorites/` : chaque favori inclut `place_details`, le lieu complet au même format que `/api/places/{id}/`. L'application affiche ainsi la liste des favoris sans une requête par lieu. Champs existants inchangés (rétrocompatible).
 
 ### Modifié
