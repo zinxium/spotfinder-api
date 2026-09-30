@@ -63,6 +63,30 @@ L'API répond sur http://127.0.0.1:8000/ et la documentation sur http://127.0.0.
 
 > **Astuce développement :** pour utiliser SQLite au lieu de PostgreSQL, mettre `DATABASE_URL=sqlite:///db.sqlite3` dans `.env`.
 
+### Données de démonstration
+
+Pour tester l'application sans rien saisir : un compte `demo`, 8 lieux au Bénin (sites touristiques réels, commerces fictifs) et 6 avis.
+
+```bash
+python manage.py seed_demo
+```
+
+- Le mot de passe du compte `demo` est **généré et affiché une seule fois dans le terminal** (pour en choisir un : `--password "..."`).
+- Relancer la commande ne crée pas de doublons ; elle génère seulement un nouveau mot de passe.
+- Refusée en production (`DEBUG=False`) : jamais de compte au mot de passe connu sur un vrai serveur.
+- Les auteurs des avis d'exemple (`awa_demo`, `koffi_demo`, `sena_demo`) n'ont pas de mot de passe utilisable.
+
+Environnement local minimal (fichier `.env`, jamais commité) :
+
+```env
+DEBUG=True
+DATABASE_URL=sqlite:///db.sqlite3
+ALLOWED_HOSTS=localhost,127.0.0.1,10.0.2.2
+CORS_ALLOWED_ORIGINS=http://localhost:8081
+```
+
+`10.0.2.2` : adresse du PC vue depuis l'émulateur Android. Pour un téléphone réel, ajouter l'adresse IP du PC sur le Wi-Fi.
+
 ## Configuration
 
 Toutes les variables se trouvent dans [`.env.example`](.env.example). Les principales :
