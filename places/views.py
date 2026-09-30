@@ -144,7 +144,7 @@ class FavoriteViewSet(viewsets.ModelViewSet):
         # Génération du schéma Swagger : pas d'utilisateur connecté
         if getattr(self, 'swagger_fake_view', False):
             return Favorite.objects.none()
-        return Favorite.objects.filter(user=self.request.user)
+        return Favorite.objects.filter(user=self.request.user).select_related('place')
     
     def perform_create(self, serializer):
         """Quand un favori est créé, associe l'utilisateur actuel"""
