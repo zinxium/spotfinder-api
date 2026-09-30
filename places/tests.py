@@ -218,3 +218,15 @@ class PermissionTests(BaseAPITestCase):
         self.authenticate('bob')
         self.assertEqual(self.client.get('/api/favorites/').data['count'], 0)
         self.assertEqual(self.client.get('/api/visits/').data['count'], 0)
+
+    def test_favorites_include_place_details(self):
+        # L'app affiche les favoris comme des cartes de lieu, sans requête supplémentaire par lieu
+        self.authenticate('alice')
+        self.client.post(f'/api/places/{self.place.id}/favorite/')
+        favorite = self.client.get('/api/favorites/').data['results'][0]
+        self.assertEqual(favorite['place'], self.place.id)
+        details = favorite['place_details']
+        self.assertEqual(details['id'], self.place.id)
+        self.assertEqual(details['city'], 'Cotonou')
+        self.assertEqual(details['category'], 'restaurant')
+        self.assertTrue(details['is_favorite'])
