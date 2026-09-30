@@ -134,7 +134,7 @@ class Review(models.Model):
     
     def __str__(self):
         """Affiche l'avis au format: Utilisateur - Place (Note)"""
-        return f"{self.user.username} - {self.place.name} ({self.rating}★)"
+        return f"{self.user.username} - {self.place.name} ({self.rating}/5)"
     
     class Meta:
         # Tri par date décroissante (plus récent d'abord)
