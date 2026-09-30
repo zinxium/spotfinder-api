@@ -21,11 +21,11 @@ Pourquoi deux tokens ? Le token d'accès circule dans toutes les requêtes : s'i
     │<─────────────────────────────────────────│
     │                                          │
     │  GET /places/  Authorization: Bearer A1  │
-    │─────────────────────────────────────────>│  ✓ 200
+    │─────────────────────────────────────────>│  OK 200
     │                                          │
     │  … 15 minutes plus tard …                │
     │  GET /favorites/  Bearer A1              │
-    │─────────────────────────────────────────>│  ✗ 401 (token expiré)
+    │─────────────────────────────────────────>│  échec 401 (token expiré)
     │                                          │
     │  POST /auth/refresh/ {refresh: R1}       │
     │─────────────────────────────────────────>│  R1 révoqué
@@ -33,7 +33,7 @@ Pourquoi deux tokens ? Le token d'accès circule dans toutes les requêtes : s'i
     │<─────────────────────────────────────────│
     │                                          │
     │  GET /favorites/  Bearer A2  (on rejoue) │
-    │─────────────────────────────────────────>│  ✓ 200
+    │─────────────────────────────────────────>│  OK 200
 ```
 
 ## Endpoints
