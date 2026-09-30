@@ -21,7 +21,7 @@ Ce document fixe les règles de versionnage du code. Elles s'appliquent **à cha
 Flux de travail :
 
 ```
-feat/ma-fonctionnalite ──PR──▶ dev ──(quand tout fonctionne)──PR──▶ main ──▶ tag vX.Y.Z
+feat/ma-fonctionnalite ──PR──> dev ──(quand tout fonctionne)──PR──> main ──> tag vX.Y.Z
 ```
 
 1. Créer la branche depuis `dev` : `git checkout dev`, `git pull`, `git checkout -b feat/…`
