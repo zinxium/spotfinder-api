@@ -44,25 +44,6 @@ class ReviewSerializer(serializers.ModelSerializer):
 
 
 # ============================================
-# SERIALIZER: Favorite
-# ============================================
-class FavoriteSerializer(serializers.ModelSerializer):
-    """
-    Serializer pour les favoris.
-    Affiche le nom de la place au lieu de son ID.
-    """
-    # Affiche le nom de la place au lieu de son ID
-    place_name = serializers.CharField(source='place.name', read_only=True)
-    
-    class Meta:
-        model = Favorite
-        # Champs retournés par l'API
-        fields = ('id', 'place', 'place_name', 'created_at')
-        # Champs en lecture seule
-        read_only_fields = ('id', 'created_at')
-
-
-# ============================================
 # SERIALIZER: User
 # ============================================
 class UserSerializer(serializers.ModelSerializer):
@@ -148,6 +129,29 @@ class PlaceSerializer(serializers.ModelSerializer):
             return Favorite.objects.filter(user=request.user, place=obj).exists()
         
         return False
+
+
+# ============================================
+# SERIALIZER: Favorite
+# ============================================
+class FavoriteSerializer(serializers.ModelSerializer):
+    """
+    Serializer pour les favoris.
+    Renvoie l'ID du lieu (utilisé à la création), son nom, et son détail complet.
+    """
+    # Affiche le nom de la place au lieu de son ID
+    place_name = serializers.CharField(source='place.name', read_only=True)
+    
+    # Détail complet du lieu (lecture seule), au même format que /api/places/{id}/ :
+    # évite au client une requête par favori
+    place_details = PlaceSerializer(source='place', read_only=True)
+    
+    class Meta:
+        model = Favorite
+        # Champs retournés par l'API
+        fields = ('id', 'place', 'place_name', 'place_details', 'created_at')
+        # Champs en lecture seule
+        read_only_fields = ('id', 'created_at')
 
 
 # ============================================
