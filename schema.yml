@@ -1133,7 +1133,7 @@ paths:
         name: id
         schema:
           type: integer
-        description: A unique integer value identifying this user.
+        description: A unique integer value identifying this utilisateur.
         required: true
       tags:
       - Users
@@ -1157,7 +1157,7 @@ paths:
         name: id
         schema:
           type: integer
-        description: A unique integer value identifying this user.
+        description: A unique integer value identifying this utilisateur.
         required: true
       tags:
       - Users
@@ -1193,7 +1193,7 @@ paths:
         name: id
         schema:
           type: integer
-        description: A unique integer value identifying this user.
+        description: A unique integer value identifying this utilisateur.
         required: true
       tags:
       - Users
@@ -1228,7 +1228,7 @@ paths:
         name: id
         schema:
           type: integer
-        description: A unique integer value identifying this user.
+        description: A unique integer value identifying this utilisateur.
         required: true
       tags:
       - Users
@@ -1249,7 +1249,7 @@ paths:
         name: id
         schema:
           type: integer
-        description: A unique integer value identifying this user.
+        description: A unique integer value identifying this utilisateur.
         required: true
       tags:
       - Users
@@ -1498,7 +1498,7 @@ components:
       type: object
       description: |-
         Serializer pour les favoris.
-        Affiche le nom de la place au lieu de son ID.
+        Renvoie l'ID du lieu (utilisé à la création), son nom, et son détail complet.
       properties:
         id:
           type: integer
@@ -1508,6 +1508,10 @@ components:
         place_name:
           type: string
           readOnly: true
+        place_details:
+          allOf:
+          - $ref: '#/components/schemas/Place'
+          readOnly: true
         created_at:
           type: string
           format: date-time
@@ -1516,6 +1520,7 @@ components:
       - created_at
       - id
       - place
+      - place_details
       - place_name
     Login:
       type: object
@@ -1698,7 +1703,7 @@ components:
       type: object
       description: |-
         Serializer pour les favoris.
-        Affiche le nom de la place au lieu de son ID.
+        Renvoie l'ID du lieu (utilisé à la création), son nom, et son détail complet.
       properties:
         id:
           type: integer
@@ -1707,6 +1712,10 @@ components:
           type: integer
         place_name:
           type: string
+          readOnly: true
+        place_details:
+          allOf:
+          - $ref: '#/components/schemas/Place'
           readOnly: true
         created_at:
           type: string
@@ -1832,20 +1841,23 @@ components:
           readOnly: true
         username:
           type: string
-          description: Required. 150 characters or fewer. Letters, digits and @/./+/-/_
-            only.
+          title: Nom d’utilisateur
+          description: Requis. 150 caractères maximum. Uniquement des lettres, nombres
+            et les caractères « @ », « . », « + », « - » et « _ ».
           pattern: ^[\w.@+-]+$
           maxLength: 150
         email:
           type: string
           format: email
-          title: Email address
+          title: Adresse électronique
           maxLength: 254
         first_name:
           type: string
+          title: Prénom
           maxLength: 150
         last_name:
           type: string
+          title: Nom
           maxLength: 150
     PatchedVisit:
       type: object
@@ -2076,20 +2088,23 @@ components:
           readOnly: true
         username:
           type: string
-          description: Required. 150 characters or fewer. Letters, digits and @/./+/-/_
-            only.
+          title: Nom d’utilisateur
+          description: Requis. 150 caractères maximum. Uniquement des lettres, nombres
+            et les caractères « @ », « . », « + », « - » et « _ ».
           pattern: ^[\w.@+-]+$
           maxLength: 150
         email:
           type: string
           format: email
-          title: Email address
+          title: Adresse électronique
           maxLength: 254
         first_name:
           type: string
+          title: Prénom
           maxLength: 150
         last_name:
           type: string
+          title: Nom
           maxLength: 150
       required:
       - id
