@@ -1,9 +1,14 @@
+from decimal import Decimal
+
 from rest_framework import serializers
 from django.contrib.auth import authenticate
 from django.contrib.auth.models import User
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError as DjangoValidationError
 from .models import Place, Review, Favorite, Category, Visit
+
+# Poids maximal d'une photo de lieu : assez pour une photo de téléphone compressée par l'app
+PLACE_IMAGE_MAX_BYTES = 5 * 1024 * 1024
 
 # ============================================
 # SERIALIZER: Category
@@ -58,6 +63,20 @@ class UserSerializer(serializers.ModelSerializer):
         # L'ID ne peut pas être modifié
         read_only_fields = ('id',)
 
+    def validate_email(self, value):
+        """
+        L'email reste unique (sans tenir compte de la casse), comme à l'inscription :
+        il sert à retrouver un compte, deux comptes ne peuvent pas le partager.
+        Le sien peut être gardé ou réécrit avec d'autres majuscules.
+        """
+        value = value.lower()
+        others = User.objects.filter(email__iexact=value)
+        if self.instance is not None:
+            others = others.exclude(pk=self.instance.pk)
+        if others.exists():
+            raise serializers.ValidationError('Cet email est déjà utilisé.')
+        return value
+
 
 # ============================================
 # SERIALIZER: Place (Principal)
@@ -68,9 +87,10 @@ class PlaceSerializer(serializers.ModelSerializer):
     Affiche tous les détails d'une place avec des données calculées.
     """
     
-    # URL complète de l'image (inclut le domaine)
-    image = serializers.SerializerMethodField()
-    
+    # Photo du lieu : envoyée en multipart à la création ou à la modification ;
+    # vérifiée par Pillow (un fichier qui n'est pas une image est refusé), renvoyée en URL complète
+    image = serializers.ImageField(required=False, allow_null=True)
+
     # Nom d'utilisateur du propriétaire (au lieu de son ID)
     owner_username = serializers.CharField(source='owner.username', read_only=True)
     
@@ -98,18 +118,12 @@ class PlaceSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError({'budget_min': 'Le budget minimum doit être inférieur au budget maximum.'})
         return attrs
     
-    def get_image(self, obj) -> str | None:
-        """Retourne l'URL complète de l'image (avec domaine)"""
-        request = self.context.get('request')
-        if obj.image:
-            # Récupère le chemin relatif de l'image
-            image_url = obj.image.url
-            
-            # Si une requête est en cours, construit l'URL absolue
-            if request is not None:
-                return request.build_absolute_uri(image_url)
-            return image_url
-        return None
+    def validate_image(self, value):
+        """Refuse les photos trop lourdes (le contenu est déjà vérifié par Pillow)"""
+        if value and value.size > PLACE_IMAGE_MAX_BYTES:
+            limit = PLACE_IMAGE_MAX_BYTES // (1024 * 1024)
+            raise serializers.ValidationError(f'La photo ne doit pas dépasser {limit} Mo.')
+        return value
     
     def get_reviews_count(self, obj) -> int:
         """Compte le nombre d'avis de cette place"""
@@ -129,6 +143,22 @@ class PlaceSerializer(serializers.ModelSerializer):
             return Favorite.objects.filter(user=request.user, place=obj).exists()
         
         return False
+
+
+# ============================================
+# SERIALIZER: Paramètres de recherche
+# ============================================
+class PlaceSearchParamsSerializer(serializers.Serializer):
+    """
+    Paramètres de /api/places/search/, vérifiés avant d'interroger la base :
+    une valeur invalide (ex. budget_min=abc) renvoie une erreur 400 claire au lieu d'une erreur 500.
+    """
+    search = serializers.CharField(required=False, allow_blank=True)
+    category = serializers.CharField(required=False, allow_blank=True)
+    city = serializers.CharField(required=False, allow_blank=True)
+    budget_min = serializers.DecimalField(required=False, max_digits=10, decimal_places=2, min_value=Decimal('0'))
+    budget_max = serializers.DecimalField(required=False, max_digits=10, decimal_places=2, min_value=Decimal('0'))
+    min_rating = serializers.FloatField(required=False, min_value=0, max_value=5)
 
 
 # ============================================
