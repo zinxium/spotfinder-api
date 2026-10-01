@@ -153,6 +153,13 @@ Tous les chemins sont préfixés par `/api/`. Le détail des paramètres et des 
 
 Les listes sont paginées : `?page=2&page_size=20` (100 maximum).
 
+Précisions :
+
+- **Photo d'un lieu** : champ `image`, envoyé en `multipart/form-data` à la création ou à la modification. Le fichier doit être une vraie image (vérifiée par Pillow) de 5 Mo au plus ; la réponse renvoie son URL complète (`null` sans photo).
+- **Note d'un lieu** (`rating`) : moyenne des avis, recalculée automatiquement à chaque création, modification ou suppression d'avis, par n'importe quel chemin (0 sans avis). En lecture seule.
+- **Recherche** : `budget_min` et `budget_max` sont des nombres positifs, `min_rating` un nombre de 0 à 5. Une valeur invalide renvoie une erreur 400 rattachée au paramètre.
+- **Profil** : l'email reste unique (sans tenir compte de la casse) et il est enregistré en minuscules.
+
 ## Droits d'accès
 
 | Règle | Détail |
