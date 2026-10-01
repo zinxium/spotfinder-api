@@ -16,6 +16,10 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/). Versions : [S
 - Messages d'erreur en **français** par défaut (`LANGUAGE_CODE=fr`) : validation Django et DRF, et la plupart des messages JWT (quelques-uns restent en anglais, faute de traduction dans simplejwt)
 
 ### Corrigé
+- **Photo d'un lieu** : le champ `image` était en lecture seule, une photo envoyée à la création était ignorée sans erreur. Il accepte maintenant un envoi `multipart/form-data` ; le fichier doit être une vraie image (Pillow) de 5 Mo au plus. La réponse garde une URL complète (4 tests)
+- **Note d'un lieu** : modifier ou supprimer un avis par `/api/reviews/` (ou par l'admin, ou en supprimant un compte) ne recalculait pas la note, et un lieu sans avis gardait sa dernière note. Calcul centralisé (`Place.refresh_rating`), déclenché par un signal à chaque changement d'avis ; migration `0005` qui recalcule une fois toutes les notes existantes (3 tests)
+- **Profil** : `PATCH /api/users/{id}/` acceptait l'email d'un autre compte. L'email reste unique sans tenir compte de la casse, comme à l'inscription, et il est enregistré en minuscules (2 tests)
+- **Recherche** : `budget_min=abc` (ou une note invalide) provoquait une erreur 500. Les paramètres sont vérifiés d'abord (`PlaceSearchParamsSerializer`) et une valeur invalide renvoie 400 ; note limitée à 0-5 ; paramètres décrits dans la documentation OpenAPI (3 tests)
 - Inscription : les erreurs de mot de passe (trop court, trop courant…) sont rattachées au champ `password` au lieu de `non_field_errors`, pour être affichées sous le bon champ dans l'application
 
 ## [1.1.1] - 2026-09-28
