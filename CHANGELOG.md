@@ -8,9 +8,15 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/). Versions : [S
 
 ### Ajouté
 - Commande `python manage.py seed_demo` : compte `demo` (mot de passe généré et affiché une fois, ou `--password`), 8 lieux et 6 avis de démonstration ; refusée si `DEBUG=False`, sans doublons si relancée (5 tests)
+- **Changement de mot de passe** : `POST /api/auth/password/change/` (`current_password`, `new_password`). Toutes les sessions sont révoquées ; la réponse contient de nouveaux tokens pour rester connecté sur cet appareil ; email d'alerte (4 tests)
+- **Mot de passe oublié** en 3 étapes : `POST /api/auth/password/reset/` (code à 6 chiffres par email), `.../verify/` (jeton à usage unique), `.../confirm/` (nouveau mot de passe, sessions révoquées, email d'alerte). Même réponse que l'email soit inscrit ou non ; code et jeton stockés en empreinte HMAC, valables 10 minutes, 5 essais par code ; limites par IP et par email (10 tests)
+- **Suppression du compte** : `DELETE /api/users/me/` avec le mot de passe. Supprime avis (notes recalculées), favoris, visites et sessions ; email de confirmation (4 tests)
+- Emails de compte envoyés en arrière-plan ; SMTP configurable (`EMAIL_*`), console en développement ; fournisseur gratuit conseillé et réglages Render dans `docs/DEPLOIEMENT.md`
 - `GET /api/favorites/` : chaque favori inclut `place_details`, le lieu complet au même format que `/api/places/{id}/`. L'application affiche ainsi la liste des favoris sans une requête par lieu. Champs existants inchangés (rétrocompatible).
 
 ### Modifié
+- Un lieu dont l'auteur supprime son compte reste en ligne, sans auteur (`owner` passe à vide, migration `0006`) au lieu d'être supprimé avec les avis, favoris et visites des autres membres
+- `DELETE /api/users/{id}/` est réservé aux administrateurs : il supprimait un compte sans demander le mot de passe
 - Flux Git : branche d'intégration `dev` (les branches de travail y sont fusionnées), `main` reçoit `dev` quand tout est fonctionnel
 - CI (tests Django et revue des dépendances) déclenchée aussi sur `dev`
 - Messages d'erreur en **français** par défaut (`LANGUAGE_CODE=fr`) : validation Django et DRF, et la plupart des messages JWT (quelques-uns restent en anglais, faute de traduction dans simplejwt)
