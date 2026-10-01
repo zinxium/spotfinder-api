@@ -83,6 +83,138 @@ paths:
           description: No response body
         '401':
           description: No response body
+  /api/auth/password/change/:
+    post:
+      operationId: api_auth_password_change_create
+      description: 'Changer son mot de passe (l''actuel est exigé). Toutes les sessions
+        sont révoquées : de nouveaux tokens sont renvoyés pour garder cet appareil
+        connecté. Un email d''alerte est envoyé.'
+      tags:
+      - Authentication
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PasswordChange'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PasswordChange'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PasswordChange'
+        required: true
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenPair'
+          description: ''
+        '400':
+          description: No response body
+        '401':
+          description: No response body
+  /api/auth/password/reset/:
+    post:
+      operationId: api_auth_password_reset_create
+      description: 'Étape 1 : demander un code à 6 chiffres par email. La réponse
+        est la même que le compte existe ou non. Limité par adresse IP et par email.'
+      tags:
+      - Authentication
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PasswordResetRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PasswordResetRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PasswordResetRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Detail'
+          description: ''
+        '400':
+          description: No response body
+        '429':
+          description: No response body
+  /api/auth/password/reset/confirm/:
+    post:
+      operationId: api_auth_password_reset_confirm_create
+      description: 'Étape 3 : choisir le nouveau mot de passe avec le jeton de l''étape
+        2. Toutes les sessions sont révoquées et un email d''alerte est envoyé.'
+      tags:
+      - Authentication
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PasswordResetConfirm'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PasswordResetConfirm'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PasswordResetConfirm'
+        required: true
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Detail'
+          description: ''
+        '400':
+          description: No response body
+        '429':
+          description: No response body
+  /api/auth/password/reset/verify/:
+    post:
+      operationId: api_auth_password_reset_verify_create
+      description: 'Étape 2 : vérifier le code reçu. 5 essais par code, valable 10
+        minutes. Renvoie un jeton à usage unique pour l''étape 3.'
+      tags:
+      - Authentication
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PasswordResetVerify'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PasswordResetVerify'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PasswordResetVerify'
+        required: true
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PasswordResetToken'
+          description: ''
+        '400':
+          description: No response body
+        '429':
+          description: No response body
   /api/auth/refresh/:
     post:
       operationId: api_auth_refresh_create
@@ -1251,10 +1383,8 @@ paths:
           description: ''
     delete:
       operationId: api_users_destroy
-      description: |-
-        ViewSet pour gérer les utilisateurs.
-        - Les utilisateurs normaux ne voient que leur profil
-        - Les administrateurs voient tous les profils
+      description: 'Réservé aux administrateurs. Pour supprimer son propre compte
+        : DELETE /api/users/me/.'
       parameters:
       - in: path
         name: id
@@ -1294,6 +1424,23 @@ paths:
               schema:
                 $ref: '#/components/schemas/User'
           description: ''
+  /api/users/me/:
+    delete:
+      operationId: api_users_me_destroy
+      description: Supprimer son compte (droit à l'effacement). Le mot de passe est
+        exigé. Les avis, favoris, visites et sessions sont supprimés ; les lieux ajoutés
+        restent en ligne, sans auteur.
+      tags:
+      - Users
+      security:
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
+        '400':
+          description: No response body
+        '401':
+          description: No response body
   /api/visits/:
     get:
       operationId: api_visits_list
@@ -1526,6 +1673,15 @@ components:
         * `loisir` - Loisir
         * `hotel` - Hôtel
         * `bar` - Bar
+    Detail:
+      type: object
+      description: Réponse contenant seulement un message
+      properties:
+        detail:
+          type: string
+          readOnly: true
+      required:
+      - detail
     Favorite:
       type: object
       description: |-
@@ -1713,6 +1869,64 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/Visit'
+    PasswordChange:
+      type: object
+      description: 'Changement de mot de passe d''un utilisateur connecté : l''actuel
+        est exigé'
+      properties:
+        current_password:
+          type: string
+          writeOnly: true
+        new_password:
+          type: string
+          writeOnly: true
+      required:
+      - current_password
+      - new_password
+    PasswordResetConfirm:
+      type: object
+      description: 'Étape 3 : le jeton et le nouveau mot de passe'
+      properties:
+        reset_token:
+          type: string
+          writeOnly: true
+        password:
+          type: string
+          writeOnly: true
+      required:
+      - password
+      - reset_token
+    PasswordResetRequest:
+      type: object
+      description: 'Étape 1 du mot de passe oublié : l''email du compte'
+      properties:
+        email:
+          type: string
+          format: email
+      required:
+      - email
+    PasswordResetToken:
+      type: object
+      description: 'Réponse de l''étape 2 : jeton à usage unique pour l''étape 3'
+      properties:
+        reset_token:
+          type: string
+          readOnly: true
+      required:
+      - reset_token
+    PasswordResetVerify:
+      type: object
+      description: 'Étape 2 : l''email et le code à 6 chiffres reçu'
+      properties:
+        email:
+          type: string
+          format: email
+        code:
+          type: string
+          pattern: ^\d{6}$
+      required:
+      - code
+      - email
     PatchedCategory:
       type: object
       description: |-
@@ -2095,6 +2309,20 @@ components:
       required:
       - docs
       - message
+    TokenPair:
+      type: object
+      description: Nouveaux tokens renvoyés après un changement de mot de passe (cet
+        appareil reste connecté)
+      properties:
+        access:
+          type: string
+          readOnly: true
+        refresh:
+          type: string
+          readOnly: true
+      required:
+      - access
+      - refresh
     TokenRefresh:
       type: object
       properties:

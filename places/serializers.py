@@ -278,3 +278,83 @@ class AuthResponseSerializer(serializers.Serializer):
     user = UserSerializer(read_only=True)
     access = serializers.CharField(read_only=True)
     refresh = serializers.CharField(read_only=True)
+
+
+# ============================================
+# SERIALIZERS: Mot de passe et compte
+# ============================================
+def _check_new_password(password, user):
+    """Règles de mot de passe de Django (AUTH_PASSWORD_VALIDATORS), erreurs sous le champ concerné"""
+    try:
+        validate_password(password, user=user)
+    except DjangoValidationError as error:
+        raise serializers.ValidationError(list(error.messages))
+    return password
+
+
+class PasswordChangeSerializer(serializers.Serializer):
+    """Changement de mot de passe d'un utilisateur connecté : l'actuel est exigé"""
+    current_password = serializers.CharField(write_only=True, style={'input_type': 'password'})
+    new_password = serializers.CharField(write_only=True, style={'input_type': 'password'})
+
+    def validate_current_password(self, value):
+        if not self.context['request'].user.check_password(value):
+            raise serializers.ValidationError('Mot de passe actuel incorrect.')
+        return value
+
+    def validate_new_password(self, value):
+        return _check_new_password(value, self.context['request'].user)
+
+    def validate(self, attrs):
+        if attrs['current_password'] == attrs['new_password']:
+            raise serializers.ValidationError({'new_password': "Choisissez un mot de passe différent de l'actuel."})
+        return attrs
+
+
+class TokenPairSerializer(serializers.Serializer):
+    """Nouveaux tokens renvoyés après un changement de mot de passe (cet appareil reste connecté)"""
+    access = serializers.CharField(read_only=True)
+    refresh = serializers.CharField(read_only=True)
+
+
+class PasswordResetRequestSerializer(serializers.Serializer):
+    """Étape 1 du mot de passe oublié : l'email du compte"""
+    email = serializers.EmailField()
+
+    def validate_email(self, value):
+        return value.lower()
+
+
+class PasswordResetVerifySerializer(serializers.Serializer):
+    """Étape 2 : l'email et le code à 6 chiffres reçu"""
+    email = serializers.EmailField()
+    code = serializers.RegexField(r'^\d{6}$', error_messages={'invalid': 'Le code contient 6 chiffres.'})
+
+    def validate_email(self, value):
+        return value.lower()
+
+
+class PasswordResetTokenSerializer(serializers.Serializer):
+    """Réponse de l'étape 2 : jeton à usage unique pour l'étape 3"""
+    reset_token = serializers.CharField(read_only=True)
+
+
+class PasswordResetConfirmSerializer(serializers.Serializer):
+    """Étape 3 : le jeton et le nouveau mot de passe"""
+    reset_token = serializers.CharField(write_only=True)
+    password = serializers.CharField(write_only=True, style={'input_type': 'password'})
+
+
+class AccountDeleteSerializer(serializers.Serializer):
+    """Suppression du compte : le mot de passe confirme que c'est bien le titulaire"""
+    password = serializers.CharField(write_only=True, style={'input_type': 'password'})
+
+    def validate_password(self, value):
+        if not self.context['request'].user.check_password(value):
+            raise serializers.ValidationError('Mot de passe incorrect.')
+        return value
+
+
+class DetailSerializer(serializers.Serializer):
+    """Réponse contenant seulement un message"""
+    detail = serializers.CharField(read_only=True)

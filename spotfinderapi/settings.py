@@ -228,6 +228,9 @@ REST_FRAMEWORK = {
         'user': config('THROTTLE_USER', default='300/minute'),
         # Connexion, inscription, rafraîchissement du token
         'auth': config('THROTTLE_AUTH', default='10/minute'),
+        # Demandes de code « mot de passe oublié » : par adresse IP, puis par email visé
+        'password_reset': config('THROTTLE_PASSWORD_RESET', default='20/hour'),
+        'password_reset_email': config('THROTTLE_PASSWORD_RESET_EMAIL', default='5/hour'),
     },
 }
 
@@ -247,6 +250,37 @@ SIMPLE_JWT = {
     'SIGNING_KEY': config('JWT_SIGNING_KEY', default=SECRET_KEY),
     'AUTH_HEADER_TYPES': ('Bearer',),
 }
+
+# ============================================
+# EMAIL - Codes de réinitialisation, alertes de sécurité
+# ============================================
+# Avec EMAIL_HOST : envoi par SMTP (fournisseur conseillé et réglages : docs/DEPLOIEMENT.md).
+# Sans EMAIL_HOST : affichage dans la console en développement ; en production, aucun envoi,
+# pour ne jamais écrire un code de réinitialisation dans les journaux du serveur.
+EMAIL_HOST = config('EMAIL_HOST', default='')
+if EMAIL_HOST:
+    EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+elif DEBUG:
+    EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
+else:
+    EMAIL_BACKEND = 'django.core.mail.backends.dummy.EmailBackend'
+EMAIL_PORT = config('EMAIL_PORT', default=587, cast=int)
+EMAIL_USE_TLS = config('EMAIL_USE_TLS', default=True, cast=bool)
+EMAIL_HOST_USER = config('EMAIL_HOST_USER', default='')
+EMAIL_HOST_PASSWORD = config('EMAIL_HOST_PASSWORD', default='')
+EMAIL_TIMEOUT = 10
+DEFAULT_FROM_EMAIL = config('DEFAULT_FROM_EMAIL', default='SpotFinder <no-reply@spotfinder.app>')
+# Envoi en arrière-plan : la réponse ne dépend pas du temps d'envoi (et ne trahit pas
+# l'existence d'un compte). Désactivé dans les tests pour lire les emails envoyés.
+EMAIL_SEND_ASYNC = config('EMAIL_SEND_ASYNC', default=True, cast=bool)
+
+# ============================================
+# MOT DE PASSE OUBLIÉ
+# ============================================
+# Durée de validité du code à 6 chiffres envoyé par email, puis du jeton de réinitialisation
+PASSWORD_RESET_CODE_MINUTES = config('PASSWORD_RESET_CODE_MINUTES', default=10, cast=int)
+# Nombre d'essais avant que le code ne soit invalidé
+PASSWORD_RESET_MAX_ATTEMPTS = 5
 
 # Swagger/OpenAPI Configuration
 SPECTACULAR_SETTINGS = {

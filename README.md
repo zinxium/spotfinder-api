@@ -33,6 +33,7 @@ Construite avec **Django 6** et **Django REST Framework**, authentification **JW
 - **Avis** : note de 1 à 5 et commentaire, un avis par utilisateur et par lieu, note moyenne recalculée
 - **Favoris** et **historique des visites**, privés à chaque utilisateur
 - **Authentification JWT** : token d'accès court, refresh token avec rotation et révocation
+- **Compte** : changement de mot de passe, mot de passe oublié (code à 6 chiffres par email), suppression du compte
 - **Sécurité** : droits par propriétaire, limitation de débit, validation des mots de passe (détails dans [Droits d'accès](#droits-daccès))
 - Stockage des images en local ou sur **Cloudinary**
 
@@ -103,6 +104,9 @@ Toutes les variables se trouvent dans [`.env.example`](.env.example). Les princi
 | `JWT_SIGNING_KEY` | Clé de signature des JWT | `SECRET_KEY` |
 | `THROTTLE_AUTH` | Limite connexion / inscription / refresh par IP | `10/minute` |
 | `THROTTLE_ANON`, `THROTTLE_USER` | Limites globales | `100/minute`, `300/minute` |
+| `THROTTLE_PASSWORD_RESET`, `THROTTLE_PASSWORD_RESET_EMAIL` | Demandes de code « mot de passe oublié », par IP et par email | `20/hour`, `5/hour` |
+| `EMAIL_HOST` + `EMAIL_*`, `DEFAULT_FROM_EMAIL` | Serveur SMTP des emails de compte ; sans `EMAIL_HOST`, emails affichés dans la console | — |
+| `PASSWORD_RESET_CODE_MINUTES` | Validité du code de réinitialisation | `10` |
 | `CORS_ALLOWED_ORIGINS` | Origines web autorisées | `http://localhost:3000,...` |
 | `LANGUAGE_CODE` | Langue des messages d'erreur renvoyés | `fr` |
 | `USE_CLOUDINARY` + `CLOUDINARY_*` | Stockage des images sur Cloudinary | `False` |
@@ -136,6 +140,11 @@ Tous les chemins sont préfixés par `/api/`. Le détail des paramètres et des 
 | POST | `auth/login/` | public | Se connecter → tokens |
 | POST | `auth/refresh/` | public | Nouveau couple access/refresh |
 | POST | `auth/logout/` | connecté | Révoquer le refresh token |
+| POST | `auth/password/change/` | connecté | Changer son mot de passe → nouveaux tokens, autres appareils déconnectés |
+| POST | `auth/password/reset/` | public | Mot de passe oublié, étape 1 : code à 6 chiffres envoyé par email |
+| POST | `auth/password/reset/verify/` | public | Étape 2 : vérifier le code → jeton à usage unique |
+| POST | `auth/password/reset/confirm/` | public | Étape 3 : nouveau mot de passe, toutes les sessions révoquées |
+| DELETE | `users/me/` | connecté | Supprimer son compte (mot de passe exigé) |
 
 ### Ressources
 
@@ -170,8 +179,9 @@ Précisions :
 | Catégories | Modification réservée aux admins |
 | Favoris, visites, profil | Visibles uniquement par leur propriétaire |
 | Création de compte | Uniquement via `auth/register/` (mots de passe validés) |
-| Anti brute-force | 10 tentatives par minute et par IP sur login, register et refresh → `429` |
-| Pas de fuite d'information | Même erreur pour « utilisateur inconnu » et « mauvais mot de passe » ; pas de message d'exception interne renvoyé |
+| Suppression d'un compte | Par son titulaire via `users/me/`, mot de passe exigé ; `DELETE users/{id}/` réservé aux admins |
+| Anti brute-force | 10 tentatives par minute et par IP sur login, register, refresh, changement de mot de passe, vérification du code et suppression du compte → `429` |
+| Pas de fuite d'information | Même erreur pour « utilisateur inconnu » et « mauvais mot de passe » ; même réponse au « mot de passe oublié » que l'email soit inscrit ou non ; pas de message d'exception interne renvoyé |
 
 ## Tests
 

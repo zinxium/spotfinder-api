@@ -38,6 +38,29 @@ L'API se déploie sur [Render](https://render.com) à partir de [`render.yaml`](
 
 > Si le service a été créé à la main (sans Blueprint), `render.yaml` n'est **pas** appliqué. Il faut reporter ces réglages dans **Settings** et **Environment** du service : Python 3.12.7, build et start command ci-dessus, variables ci-dessus.
 
+## Emails (mot de passe oublié, alertes de sécurité)
+
+L'API envoie des emails pour le code « mot de passe oublié » et pour les alertes (mot de passe modifié, compte supprimé). **Sans `EMAIL_HOST` en production, aucun email ne part** : le mot de passe oublié ne fonctionne pas.
+
+Le plan gratuit de Render **bloque les ports SMTP habituels (25, 465, 587)** depuis septembre 2025. Fournisseur conseillé, gratuit : **Brevo** (300 emails par jour, sans carte bancaire), qui accepte aussi le port **2525**, non bloqué.
+
+1. Créer un compte sur [brevo.com](https://www.brevo.com), puis **Senders, Domains & Dedicated IPs** : ajouter et vérifier l'adresse d'expéditeur (idéalement un domaine à vous, pour ne pas finir en spam).
+2. **SMTP & API > SMTP** : noter l'identifiant SMTP et générer une clé SMTP.
+3. Dans **Environment** du service Render :
+
+| Variable | Valeur |
+|---|---|
+| `EMAIL_HOST` | `smtp-relay.brevo.com` |
+| `EMAIL_PORT` | `2525` |
+| `EMAIL_USE_TLS` | `True` |
+| `EMAIL_HOST_USER` | Identifiant SMTP Brevo |
+| `EMAIL_HOST_PASSWORD` | Clé SMTP Brevo (secret : jamais dans Git) |
+| `DEFAULT_FROM_EMAIL` | `SpotFinder <adresse vérifiée à l'étape 1>` |
+
+4. Vérifier : sur l'écran « Mot de passe oublié » de l'app (ou `POST /api/auth/password/reset/`), demander un code pour son propre email. En cas d'échec, l'erreur apparaît dans les **Logs** du service (« Échec de l'envoi d'un email de compte »), sans l'adresse ni le code.
+
+Avec un plan Render payant, n'importe quel fournisseur SMTP fonctionne sur le port 587 (Gmail avec un mot de passe d'application, par exemple).
+
 ## Variables optionnelles
 
 Toutes sont décrites dans [`.env.example`](../.env.example) : durée des tokens JWT, limites de débit, CORS, etc. Les valeurs par défaut conviennent pour la production.

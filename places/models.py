@@ -1,5 +1,12 @@
-from django.db import models
+import hashlib
+import hmac
+import secrets
+from datetime import timedelta
+
+from django.conf import settings
 from django.contrib.auth.models import User
+from django.db import models
+from django.utils import timezone
 
 # ============================================
 # MODÈLE: Category (Catégories de places)
@@ -80,8 +87,10 @@ class Place(models.Model):
     # Note moyenne du lieu (calculée automatiquement à partir des avis)
     rating = models.FloatField(default=0)
 
-    # Propriétaire/créateur du lieu (lien avec l'utilisateur)
-    owner = models.ForeignKey(User, on_delete=models.CASCADE, related_name='places', null=True, blank=True)
+    # Propriétaire/créateur du lieu (lien avec l'utilisateur).
+    # Si son compte est supprimé, le lieu reste en ligne sans auteur : il appartient à la
+    # communauté (avis, favoris et visites des autres membres y sont rattachés).
+    owner = models.ForeignKey(User, on_delete=models.SET_NULL, related_name='places', null=True, blank=True)
 
     # Dates de suivi
     # Date de création automatique (ne change jamais)
@@ -223,3 +232,117 @@ class Visit(models.Model):
         # Contrainte: un utilisateur peut visiter plusieurs fois la même place
         # (pas de unique_together ici, contrairement aux favoris)
 
+
+# ============================================
+# MODÈLE: PasswordResetCode (Mot de passe oublié)
+# ============================================
+def _digest(value):
+    """
+    Empreinte HMAC-SHA256 d'une valeur secrète, signée avec SECRET_KEY.
+    Un code à 6 chiffres n'a qu'un million de valeurs possibles : une empreinte simple se
+    retrouverait en quelques secondes depuis une copie de la base. Avec la clé du serveur,
+    la base seule ne suffit pas.
+    """
+    return hmac.new(settings.SECRET_KEY.encode(), value.encode(), hashlib.sha256).hexdigest()
+
+
+class PasswordResetCode(models.Model):
+    """
+    Demande de réinitialisation du mot de passe, en deux temps :
+    1. un code à 6 chiffres est envoyé par email (valable quelques minutes, essais limités) ;
+    2. une fois le code vérifié, il est remplacé par un jeton de réinitialisation à usage unique,
+       qui permet de choisir le nouveau mot de passe.
+    Ni le code ni le jeton ne sont conservés en clair : seulement leur empreinte.
+    """
+
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='password_reset_codes')
+
+    # Empreinte du code envoyé par email (vidée une fois le code vérifié)
+    code_hash = models.CharField(max_length=64, blank=True)
+
+    # Nombre d'essais de code déjà faits
+    attempts = models.PositiveSmallIntegerField(default=0)
+
+    # Empreinte du jeton de réinitialisation, remplie une fois le code vérifié
+    token_hash = models.CharField(max_length=64, blank=True, db_index=True)
+
+    # Fin de validité du code, puis du jeton
+    expires_at = models.DateTimeField()
+
+    # Date d'utilisation du jeton : la demande ne sert plus
+    used_at = models.DateTimeField(null=True, blank=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"Réinitialisation de {self.user.username} ({self.created_at:%Y-%m-%d %H:%M})"
+
+    @staticmethod
+    def validity():
+        return timedelta(minutes=settings.PASSWORD_RESET_CODE_MINUTES)
+
+    @classmethod
+    def issue(cls, user):
+        """
+        Crée une demande pour cet utilisateur et renvoie le code en clair (à envoyer par email).
+        Les demandes précédentes encore en cours sont supprimées : seul le dernier code compte.
+        """
+        cls.objects.filter(user=user, used_at__isnull=True).delete()
+        code = f"{secrets.randbelow(1_000_000):06d}"
+        cls.objects.create(
+            user=user,
+            code_hash=_digest(f"{user.pk}:{code}"),
+            expires_at=timezone.now() + cls.validity(),
+        )
+        return code
+
+    @classmethod
+    def pending_for(cls, user):
+        """Dernière demande dont le code peut encore être essayé, ou None"""
+        return cls.objects.filter(
+            user=user,
+            used_at__isnull=True,
+            token_hash='',
+            expires_at__gt=timezone.now(),
+            attempts__lt=settings.PASSWORD_RESET_MAX_ATTEMPTS,
+        ).exclude(code_hash='').first()
+
+    def check_code(self, code):
+        """
+        Compte un essai, puis compare le code (comparaison à temps constant).
+        Le compteur est incrémenté en base avant la comparaison : des essais simultanés
+        ne peuvent pas dépasser la limite.
+        """
+        type(self).objects.filter(pk=self.pk).update(attempts=models.F('attempts') + 1)
+        self.refresh_from_db(fields=['attempts'])
+        return hmac.compare_digest(self.code_hash, _digest(f"{self.user_id}:{code}"))
+
+    @property
+    def attempts_left(self):
+        return max(settings.PASSWORD_RESET_MAX_ATTEMPTS - self.attempts, 0)
+
+    def exchange_for_token(self):
+        """
+        Code vérifié : le remplace par un jeton de réinitialisation à usage unique et le renvoie
+        en clair. Le code ne peut plus être réutilisé.
+        """
+        token = secrets.token_urlsafe(32)
+        self.code_hash = ''
+        self.token_hash = _digest(token)
+        self.expires_at = timezone.now() + self.validity()
+        self.save(update_fields=['code_hash', 'token_hash', 'expires_at'])
+        return token
+
+    @classmethod
+    def from_token(cls, token):
+        """Demande correspondant à un jeton valide (vérifié, non utilisé, non expiré), ou None"""
+        if not token:
+            return None
+        return cls.objects.select_related('user').filter(
+            token_hash=_digest(token),
+            used_at__isnull=True,
+            expires_at__gt=timezone.now(),
+        ).first()

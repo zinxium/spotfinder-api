@@ -7,14 +7,25 @@ from rest_framework.decorators import api_view, permission_classes, throttle_cla
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.throttling import SimpleRateThrottle
 from rest_framework_simplejwt.exceptions import TokenError
+from rest_framework_simplejwt.token_blacklist.models import BlacklistedToken, OutstandingToken
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.views import TokenRefreshView
 from rest_framework.pagination import PageNumberPagination
 from django.contrib.auth.models import User
+from django.contrib.auth.password_validation import validate_password
+from django.core.exceptions import ValidationError as DjangoValidationError
+from django.db import transaction
 from django.db.models import Q
+from django.utils import timezone
+import hashlib
 from drf_spectacular.utils import extend_schema_view, extend_schema
-from .models import Place, Review, Favorite, Category, Visit
+from .emails import send_account_deleted, send_password_changed, send_reset_code
+from .models import Place, Review, Favorite, Category, Visit, PasswordResetCode
 from .serializers import PlaceSerializer, ReviewSerializer, FavoriteSerializer, UserSerializer, CategorySerializer, VisitSerializer, RegisterSerializer, LoginSerializer, LogoutSerializer, AuthResponseSerializer, PlaceSearchParamsSerializer
+from .serializers import (
+    AccountDeleteSerializer, DetailSerializer, PasswordChangeSerializer, PasswordResetConfirmSerializer,
+    PasswordResetRequestSerializer, PasswordResetTokenSerializer, PasswordResetVerifySerializer, TokenPairSerializer,
+)
 from .permissions import IsAdminOrReadOnly, IsOwnerOrReadOnly
 
 
@@ -190,8 +201,17 @@ class FavoriteViewSet(viewsets.ModelViewSet):
     create=extend_schema(tags=["Users"]),
     update=extend_schema(tags=["Users"]),
     partial_update=extend_schema(tags=["Users"]),
-    destroy=extend_schema(tags=["Users"]),
+    destroy=extend_schema(tags=["Users"], description="Réservé aux administrateurs. Pour supprimer son propre compte : DELETE /api/users/me/."),
     places=extend_schema(tags=["Users"]),
+    me=extend_schema(
+        tags=["Users"],
+        description=(
+            "Supprimer son compte (droit à l'effacement). Le mot de passe est exigé. "
+            "Les avis, favoris, visites et sessions sont supprimés ; les lieux ajoutés restent en ligne, sans auteur."
+        ),
+        request=AccountDeleteSerializer,
+        responses={204: None, 400: {}, 401: {}},
+    ),
 )
 class UserViewSet(viewsets.ModelViewSet):
     """
@@ -224,6 +244,48 @@ class UserViewSet(viewsets.ModelViewSet):
         
         # Sinon, affiche uniquement cet utilisateur
         return User.objects.filter(id=self.request.user.id)
+
+    def get_throttles(self):
+        """Suppression du compte : le mot de passe est exigé, on limite donc les essais comme à la connexion"""
+        if self.action == 'me':
+            return [AuthRateThrottle()]
+        return super().get_throttles()
+
+    def destroy(self, request, *args, **kwargs):
+        """
+        Supprimer un compte par son identifiant : réservé aux administrateurs.
+        Un utilisateur supprime le sien avec DELETE /api/users/me/, qui exige son mot de passe.
+        """
+        if not request.user.is_staff:
+            return Response(
+                {'detail': 'Utilisez DELETE /api/users/me/ pour supprimer votre compte.'},
+                status=status.HTTP_405_METHOD_NOT_ALLOWED
+            )
+        return super().destroy(request, *args, **kwargs)
+
+    def perform_destroy(self, instance):
+        """Avant la suppression, révoque les sessions : un refresh token ne doit pas survivre au compte"""
+        revoke_all_sessions(instance)
+        instance.delete()
+
+    @action(detail=False, methods=['delete'])
+    def me(self, request):
+        """
+        Supprime le compte de l'utilisateur connecté.
+
+        Usage: DELETE /api/users/me/ avec {"password": "..."}
+        Supprimés : le compte, ses avis (les notes des lieux sont recalculées), favoris, visites,
+        demandes de réinitialisation et sessions. Conservés : les lieux ajoutés, sans auteur.
+        Un email de confirmation est envoyé.
+        """
+        serializer = AccountDeleteSerializer(data=request.data, context={'request': request})
+        serializer.is_valid(raise_exception=True)
+        user = request.user
+        username, email = user.username, user.email
+        with transaction.atomic():
+            self.perform_destroy(user)
+            transaction.on_commit(lambda: send_account_deleted(username, email))
+        return Response(status=status.HTTP_204_NO_CONTENT)
     
     @action(detail=True, methods=['get'])
     def places(self, request, pk=None):
@@ -464,6 +526,38 @@ class AuthRateThrottle(SimpleRateThrottle):
         return self.cache_format % {'scope': self.scope, 'ident': self.get_ident(request)}
 
 
+class PasswordResetRateThrottle(SimpleRateThrottle):
+    """Limite les demandes de code « mot de passe oublié » par adresse IP (voir THROTTLE_PASSWORD_RESET)"""
+    scope = 'password_reset'
+
+    def get_cache_key(self, request, view):
+        return self.cache_format % {'scope': self.scope, 'ident': self.get_ident(request)}
+
+
+class PasswordResetEmailRateThrottle(SimpleRateThrottle):
+    """
+    Limite les demandes de code pour une même adresse email, quelle que soit l'IP
+    (voir THROTTLE_PASSWORD_RESET_EMAIL) : évite d'inonder une boîte mail de codes.
+    L'email est haché dans la clé de cache.
+    """
+    scope = 'password_reset_email'
+
+    def get_cache_key(self, request, view):
+        email = str(request.data.get('email', '')).strip().lower()
+        if not email:
+            return None
+        return self.cache_format % {'scope': self.scope, 'ident': hashlib.sha256(email.encode()).hexdigest()}
+
+
+def revoke_all_sessions(user):
+    """
+    Révoque tous les refresh tokens de l'utilisateur : chaque appareil devra se reconnecter.
+    Les tokens d'accès déjà émis restent valables jusqu'à leur expiration (JWT_ACCESS_MINUTES).
+    """
+    for token in OutstandingToken.objects.filter(user=user):
+        BlacklistedToken.objects.get_or_create(token=token)
+
+
 # ============================================
 # VUE: Register (Créer un compte)
 # ============================================
@@ -574,6 +668,141 @@ def logout(request):
             status=status.HTTP_400_BAD_REQUEST
         )
     return Response(status=status.HTTP_205_RESET_CONTENT)
+
+
+# ============================================
+# VUE: Changement de mot de passe
+# ============================================
+@extend_schema(
+    tags=["Authentication"],
+    description=(
+        "Changer son mot de passe (l'actuel est exigé). Toutes les sessions sont révoquées : "
+        "de nouveaux tokens sont renvoyés pour garder cet appareil connecté. Un email d'alerte est envoyé."
+    ),
+    request=PasswordChangeSerializer,
+    responses={200: TokenPairSerializer, 400: {}, 401: {}}
+)
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+@throttle_classes([AuthRateThrottle])
+def password_change(request):
+    """
+    Usage: POST /api/auth/password/change/
+    Données requises: {"current_password": "...", "new_password": "..."}
+    Retour: {"access": "...", "refresh": "..."} (les anciens refresh tokens ne marchent plus)
+    """
+    serializer = PasswordChangeSerializer(data=request.data, context={'request': request})
+    serializer.is_valid(raise_exception=True)
+    user = request.user
+    with transaction.atomic():
+        user.set_password(serializer.validated_data['new_password'])
+        user.save(update_fields=['password'])
+        revoke_all_sessions(user)
+        transaction.on_commit(lambda: send_password_changed(user))
+    refresh = RefreshToken.for_user(user)
+    return Response({'access': str(refresh.access_token), 'refresh': str(refresh)})
+
+
+# ============================================
+# VUES: Mot de passe oublié (3 étapes)
+# ============================================
+RESET_REQUEST_MESSAGE = "Si un compte correspond à cet email, un code à 6 chiffres vient d'y être envoyé."
+RESET_CODE_ERROR = 'Code incorrect ou expiré.'
+
+
+@extend_schema(
+    tags=["Authentication"],
+    description=(
+        "Étape 1 : demander un code à 6 chiffres par email. La réponse est la même que le compte "
+        "existe ou non. Limité par adresse IP et par email."
+    ),
+    request=PasswordResetRequestSerializer,
+    responses={200: DetailSerializer, 400: {}, 429: {}}
+)
+@api_view(['POST'])
+@permission_classes([AllowAny])
+@throttle_classes([PasswordResetRateThrottle, PasswordResetEmailRateThrottle])
+def password_reset_request(request):
+    """
+    Usage: POST /api/auth/password/reset/ avec {"email": "..."}
+    Un nouveau code remplace le précédent. Rien n'est envoyé si aucun compte actif ne correspond.
+    """
+    serializer = PasswordResetRequestSerializer(data=request.data)
+    serializer.is_valid(raise_exception=True)
+    user = User.objects.filter(email__iexact=serializer.validated_data['email'], is_active=True).first()
+    if user is not None:
+        code = PasswordResetCode.issue(user)
+        send_reset_code(user, code)
+    return Response({'detail': RESET_REQUEST_MESSAGE})
+
+
+@extend_schema(
+    tags=["Authentication"],
+    description=(
+        "Étape 2 : vérifier le code reçu. 5 essais par code, valable 10 minutes. "
+        "Renvoie un jeton à usage unique pour l'étape 3."
+    ),
+    request=PasswordResetVerifySerializer,
+    responses={200: PasswordResetTokenSerializer, 400: {}, 429: {}}
+)
+@api_view(['POST'])
+@permission_classes([AllowAny])
+@throttle_classes([AuthRateThrottle])
+def password_reset_verify(request):
+    """
+    Usage: POST /api/auth/password/reset/verify/ avec {"email": "...", "code": "123456"}
+    Retour: {"reset_token": "..."}
+    Même erreur que l'email soit inconnu, le code faux, expiré ou épuisé : rien ne révèle un compte.
+    """
+    serializer = PasswordResetVerifySerializer(data=request.data)
+    serializer.is_valid(raise_exception=True)
+    user = User.objects.filter(email__iexact=serializer.validated_data['email'], is_active=True).first()
+    pending = PasswordResetCode.pending_for(user) if user is not None else None
+    if pending is None or not pending.check_code(serializer.validated_data['code']):
+        return Response({'code': [RESET_CODE_ERROR]}, status=status.HTTP_400_BAD_REQUEST)
+    return Response({'reset_token': pending.exchange_for_token()})
+
+
+@extend_schema(
+    tags=["Authentication"],
+    description=(
+        "Étape 3 : choisir le nouveau mot de passe avec le jeton de l'étape 2. "
+        "Toutes les sessions sont révoquées et un email d'alerte est envoyé."
+    ),
+    request=PasswordResetConfirmSerializer,
+    responses={200: DetailSerializer, 400: {}, 429: {}}
+)
+@api_view(['POST'])
+@permission_classes([AllowAny])
+@throttle_classes([AuthRateThrottle])
+def password_reset_confirm(request):
+    """
+    Usage: POST /api/auth/password/reset/confirm/ avec {"reset_token": "...", "password": "..."}
+    L'utilisateur se reconnecte ensuite avec son nouveau mot de passe.
+    """
+    serializer = PasswordResetConfirmSerializer(data=request.data)
+    serializer.is_valid(raise_exception=True)
+    reset = PasswordResetCode.from_token(serializer.validated_data['reset_token'])
+    if reset is None:
+        return Response(
+            {'reset_token': ['Demande expirée ou déjà utilisée : recommencez depuis le début.']},
+            status=status.HTTP_400_BAD_REQUEST
+        )
+    user = reset.user
+    password = serializer.validated_data['password']
+    try:
+        validate_password(password, user=user)
+    except DjangoValidationError as error:
+        return Response({'password': list(error.messages)}, status=status.HTTP_400_BAD_REQUEST)
+    with transaction.atomic():
+        user.set_password(password)
+        user.save(update_fields=['password'])
+        # Jeton consommé ; les autres demandes de cet utilisateur ne servent plus
+        PasswordResetCode.objects.filter(pk=reset.pk).update(used_at=timezone.now())
+        PasswordResetCode.objects.filter(user=user).exclude(pk=reset.pk).delete()
+        revoke_all_sessions(user)
+        transaction.on_commit(lambda: send_password_changed(user))
+    return Response({'detail': 'Mot de passe modifié. Connectez-vous avec le nouveau.'})
 
 
 # ============================================
