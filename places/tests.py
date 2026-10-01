@@ -1,18 +1,22 @@
+import re
 import shutil
 import tempfile
+from datetime import timedelta
 from io import BytesIO, StringIO
 from unittest.mock import patch
 
 from django.contrib.auth.models import User
+from django.core import mail
 from django.core.cache import cache
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.core.management import CommandError, call_command
 from django.test import override_settings
+from django.utils import timezone
 from rest_framework import status
 from PIL import Image
 from rest_framework.test import APITestCase
 
-from .models import Category, Place, Review
+from .models import Category, PasswordResetCode, Place, Review
 from .views import AuthRateThrottle
 
 
@@ -377,6 +381,205 @@ class ProfileTests(BaseAPITestCase):
         self.alice.refresh_from_db()
         self.assertEqual(self.alice.email, 'alice@example.com')
         self.assertEqual(self.alice.first_name, 'Alice')
+
+
+# ============================================
+# TESTS: Changement de mot de passe
+# ============================================
+NEW_PASSWORD = 'N0uveau!Mot2Passe'
+
+
+def refresh_works(client, refresh):
+    return client.post('/api/auth/refresh/', {'refresh': refresh}, format='json').status_code == status.HTTP_200_OK
+
+
+@override_settings(EMAIL_SEND_ASYNC=False)
+class PasswordChangeTests(BaseAPITestCase):
+    def change(self, current, new):
+        return self.client.post(
+            '/api/auth/password/change/', {'current_password': current, 'new_password': new}, format='json'
+        )
+
+    def test_requires_authentication(self):
+        self.assertEqual(self.change(PASSWORD, NEW_PASSWORD).status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_rejects_wrong_current_password(self):
+        self.authenticate()
+        response = self.change('mauvais', NEW_PASSWORD)
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('current_password', response.data)
+        self.alice.refresh_from_db()
+        self.assertTrue(self.alice.check_password(PASSWORD))
+
+    def test_rejects_weak_or_unchanged_password(self):
+        self.authenticate()
+        for weak in ('123456', PASSWORD):
+            response = self.change(PASSWORD, weak)
+            self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST, weak)
+            self.assertIn('new_password', response.data)
+
+    def test_success_revokes_other_sessions_and_returns_new_tokens(self):
+        other_device = self.login().data['refresh']
+        self.authenticate()
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.change(PASSWORD, NEW_PASSWORD)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertFalse(refresh_works(self.client, other_device))
+        self.assertTrue(refresh_works(self.client, response.data['refresh']))
+        self.assertEqual(self.login(password=NEW_PASSWORD).status_code, status.HTTP_200_OK)
+        self.assertEqual(self.login(password=PASSWORD).status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertEqual(mail.outbox[0].to, ['alice@example.com'])
+
+
+# ============================================
+# TESTS: Mot de passe oublié
+# ============================================
+@override_settings(EMAIL_SEND_ASYNC=False)
+class PasswordResetTests(BaseAPITestCase):
+    def request_code(self, email='alice@example.com'):
+        return self.client.post('/api/auth/password/reset/', {'email': email}, format='json')
+
+    def sent_code(self):
+        return re.search(r'\b(\d{6})\b', mail.outbox[-1].body).group(1)
+
+    def verify(self, code, email='alice@example.com'):
+        return self.client.post('/api/auth/password/reset/verify/', {'email': email, 'code': code}, format='json')
+
+    def confirm(self, token, password=NEW_PASSWORD):
+        return self.client.post(
+            '/api/auth/password/reset/confirm/', {'reset_token': token, 'password': password}, format='json'
+        )
+
+    def wrong(self, code):
+        """Un code à 6 chiffres différent du bon"""
+        return f'{(int(code) + 1) % 1_000_000:06d}'
+
+    def test_same_answer_whether_account_exists_or_not(self):
+        known = self.request_code('ALICE@example.com')
+        unknown = self.request_code('personne@example.com')
+        self.assertEqual(known.status_code, status.HTTP_200_OK)
+        self.assertEqual(unknown.status_code, status.HTTP_200_OK)
+        self.assertEqual(known.data, unknown.data)
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertEqual(mail.outbox[0].to, ['alice@example.com'])
+
+    def test_full_flow_changes_password_and_revokes_sessions(self):
+        old_session = self.login().data['refresh']
+        self.request_code()
+        code = self.sent_code()
+        token = self.verify(code).data['reset_token']
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.confirm(token)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(self.login(password=NEW_PASSWORD).status_code, status.HTTP_200_OK)
+        self.assertFalse(refresh_works(self.client, old_session))
+        # Alerte « mot de passe modifié » après l'email du code
+        self.assertEqual(len(mail.outbox), 2)
+        # Code et jeton sont à usage unique
+        self.assertEqual(self.verify(code).status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(self.confirm(token, 'Encore!Un4utre').status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_code_is_not_stored_in_clear(self):
+        self.request_code()
+        code = self.sent_code()
+        stored = PasswordResetCode.objects.get(user=self.alice)
+        self.assertNotIn(code, stored.code_hash)
+        self.assertEqual(len(stored.code_hash), 64)
+
+    def test_code_is_invalidated_after_5_wrong_attempts(self):
+        self.request_code()
+        code = self.sent_code()
+        for _ in range(5):
+            response = self.verify(self.wrong(code))
+            self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+            self.assertIn('code', response.data)
+        self.assertEqual(self.verify(code).status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_unknown_email_and_wrong_code_give_the_same_error(self):
+        self.request_code()
+        code = self.sent_code()
+        self.assertEqual(self.verify(self.wrong(code)).data, self.verify(code, 'personne@example.com').data)
+
+    def test_expired_code_is_rejected(self):
+        self.request_code()
+        code = self.sent_code()
+        PasswordResetCode.objects.update(expires_at=timezone.now() - timedelta(seconds=1))
+        self.assertEqual(self.verify(code).status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_new_request_replaces_previous_code(self):
+        self.request_code()
+        first = self.sent_code()
+        self.request_code()
+        second = self.sent_code()
+        if first != second:
+            self.assertEqual(self.verify(first).status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(self.verify(second).status_code, status.HTTP_200_OK)
+
+    def test_weak_password_is_rejected_and_token_kept(self):
+        self.request_code()
+        token = self.verify(self.sent_code()).data['reset_token']
+        response = self.confirm(token, '123456')
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('password', response.data)
+        self.assertEqual(self.confirm(token).status_code, status.HTTP_200_OK)
+
+    def test_requests_are_limited_per_email(self):
+        for _ in range(5):
+            self.assertEqual(self.request_code().status_code, status.HTTP_200_OK)
+        self.assertEqual(self.request_code().status_code, status.HTTP_429_TOO_MANY_REQUESTS)
+        # Une autre adresse n'est pas bloquée
+        self.assertEqual(self.request_code('bob@example.com').status_code, status.HTTP_200_OK)
+
+    def test_code_must_be_six_digits(self):
+        self.assertEqual(self.verify('12ab').status_code, status.HTTP_400_BAD_REQUEST)
+
+
+# ============================================
+# TESTS: Suppression du compte
+# ============================================
+@override_settings(EMAIL_SEND_ASYNC=False)
+class AccountDeletionTests(BaseAPITestCase):
+    def delete_me(self, password=PASSWORD):
+        return self.client.delete('/api/users/me/', {'password': password}, format='json')
+
+    def test_requires_authentication(self):
+        self.assertEqual(self.delete_me().status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_wrong_password_keeps_the_account(self):
+        self.authenticate()
+        response = self.delete_me('mauvais')
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('password', response.data)
+        self.assertTrue(User.objects.filter(pk=self.alice.pk).exists())
+
+    def test_deletes_personal_data_keeps_places_and_revokes_sessions(self):
+        own_place = make_place(self.alice, name='Lieu d’Alice')
+        bobs_place = make_place(self.bob, name='Lieu de Bob')
+        Review.objects.create(place=bobs_place, user=self.alice, rating=1, comment='Bof')
+        Review.objects.create(place=bobs_place, user=self.bob, rating=5, comment='Top')
+        session = self.authenticate()['refresh']
+        with self.captureOnCommitCallbacks(execute=True):
+            response = self.delete_me()
+        self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
+        self.assertFalse(User.objects.filter(pk=self.alice.pk).exists())
+        # Avis supprimé, note du lieu recalculée
+        bobs_place.refresh_from_db()
+        self.assertEqual(bobs_place.rating, 5)
+        # Le lieu ajouté reste en ligne, sans auteur
+        own_place.refresh_from_db()
+        self.assertIsNone(own_place.owner)
+        self.client.credentials()
+        self.assertEqual(self.client.get(f'/api/places/{own_place.id}/').status_code, status.HTTP_200_OK)
+        self.assertFalse(refresh_works(self.client, session))
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertEqual(mail.outbox[0].to, ['alice@example.com'])
+
+    def test_cannot_delete_by_id_without_password(self):
+        self.authenticate()
+        response = self.client.delete(f'/api/users/{self.alice.id}/')
+        self.assertEqual(response.status_code, status.HTTP_405_METHOD_NOT_ALLOWED)
+        self.assertTrue(User.objects.filter(pk=self.alice.pk).exists())
 
 
 # ============================================
