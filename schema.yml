@@ -703,7 +703,7 @@ paths:
         Usage: POST /api/places/{id}/add_review/
         Données requis: {"rating": 5, "comment": "Excellent lieu!"}
 
-        Met à jour automatiquement la note moyenne de la place.
+        La note moyenne du lieu est mise à jour automatiquement.
       parameters:
       - in: path
         name: id
@@ -876,6 +876,38 @@ paths:
         - page_size: Nombre de résultats par page (max: 100)
 
         Exemple: /api/places/search/?search=restaurant&city=Paris&budget_max=50000&min_rating=4
+      parameters:
+      - in: query
+        name: budget_max
+        schema:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,8}(?:\.\d{0,2})?$
+      - in: query
+        name: budget_min
+        schema:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,8}(?:\.\d{0,2})?$
+      - in: query
+        name: category
+        schema:
+          type: string
+      - in: query
+        name: city
+        schema:
+          type: string
+      - in: query
+        name: min_rating
+        schema:
+          type: number
+          format: double
+          maximum: 5
+          minimum: 0
+      - in: query
+        name: search
+        schema:
+          type: string
       tags:
       - Places
       security:
@@ -1732,9 +1764,8 @@ components:
           readOnly: true
         image:
           type: string
+          format: uri
           nullable: true
-          description: Retourne l'URL complète de l'image (avec domaine)
-          readOnly: true
         owner_username:
           type: string
           readOnly: true
@@ -1902,9 +1933,8 @@ components:
           readOnly: true
         image:
           type: string
+          format: uri
           nullable: true
-          description: Retourne l'URL complète de l'image (avec domaine)
-          readOnly: true
         owner_username:
           type: string
           readOnly: true
@@ -1974,7 +2004,6 @@ components:
       - created_at
       - favorites_count
       - id
-      - image
       - is_favorite
       - latitude
       - longitude

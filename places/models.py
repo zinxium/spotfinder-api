@@ -94,6 +94,16 @@ class Place(models.Model):
         """Affiche le nom de la place"""
         return self.name
 
+    @classmethod
+    def refresh_rating(cls, place_id):
+        """
+        Recalcule la note moyenne d'un lieu à partir de ses avis (0 s'il n'en a plus).
+        Appelée à chaque création, modification ou suppression d'avis (voir signals.py).
+        Mise à jour par requête filtrée : sans effet, et sans erreur, si le lieu vient d'être supprimé.
+        """
+        average = Review.objects.filter(place_id=place_id).aggregate(models.Avg('rating'))['rating__avg']
+        cls.objects.filter(pk=place_id).update(rating=round(average, 2) if average is not None else 0)
+
     # Propriété calculée : budget moyen
     @property
     def budget_avg(self):

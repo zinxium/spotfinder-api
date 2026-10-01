@@ -1,11 +1,15 @@
-from io import StringIO
+import shutil
+import tempfile
+from io import BytesIO, StringIO
 from unittest.mock import patch
 
 from django.contrib.auth.models import User
 from django.core.cache import cache
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.core.management import CommandError, call_command
 from django.test import override_settings
 from rest_framework import status
+from PIL import Image
 from rest_framework.test import APITestCase
 
 from .models import Category, Place, Review
@@ -233,6 +237,146 @@ class PermissionTests(BaseAPITestCase):
         self.assertEqual(details['city'], 'Cotonou')
         self.assertEqual(details['category'], 'restaurant')
         self.assertTrue(details['is_favorite'])
+
+
+def make_image(name='lieu.png', size=(40, 30)):
+    """Petite image PNG valide, comme celle envoyée par l'app"""
+    buffer = BytesIO()
+    Image.new('RGB', size, (248, 89, 21)).save(buffer, format='PNG')
+    return SimpleUploadedFile(name, buffer.getvalue(), content_type='image/png')
+
+
+# ============================================
+# TESTS: Photo d'un lieu
+# ============================================
+class PlaceImageTests(BaseAPITestCase):
+    def setUp(self):
+        super().setUp()
+        # Les fichiers envoyés pendant les tests vont dans un dossier jetable
+        self.media = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.media, ignore_errors=True)
+        override = override_settings(MEDIA_ROOT=self.media)
+        override.enable()
+        self.addCleanup(override.disable)
+        self.authenticate('alice')
+
+    def create(self, image):
+        return self.client.post('/api/places/', {
+            'name': 'Maquis Photo', 'category': 'bar', 'city': 'Cotonou',
+            'latitude': '6.36', 'longitude': '2.42', 'image': image,
+        }, format='multipart')
+
+    def test_photo_sent_with_a_new_place_is_saved_and_returned_as_url(self):
+        response = self.create(make_image())
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        place = Place.objects.get(id=response.data['id'])
+        self.assertTrue(place.image.name)
+        self.assertTrue(response.data['image'].startswith('http'))
+
+    def test_a_file_that_is_not_an_image_is_rejected(self):
+        fake = SimpleUploadedFile('lieu.png', b'pas une image', content_type='image/png')
+        response = self.create(fake)
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('image', response.data)
+
+    def test_a_too_heavy_image_is_rejected(self):
+        with patch('places.serializers.PLACE_IMAGE_MAX_BYTES', 100):
+            response = self.create(make_image())
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('image', response.data)
+
+    def test_place_without_photo_still_works(self):
+        response = self.client.post('/api/places/', {
+            'name': 'Sans photo', 'category': 'bar', 'city': 'Cotonou', 'latitude': 6.36, 'longitude': 2.42,
+        }, format='json')
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertIsNone(response.data['image'])
+
+
+# ============================================
+# TESTS: Note moyenne d'un lieu
+# ============================================
+class PlaceRatingTests(BaseAPITestCase):
+    def setUp(self):
+        super().setUp()
+        self.place = make_place(self.alice)
+
+    def rating(self):
+        self.place.refresh_from_db()
+        return self.place.rating
+
+    def test_rating_follows_reviews_created_through_reviews_endpoint(self):
+        self.authenticate('bob')
+        self.client.post('/api/reviews/', {'place': self.place.id, 'rating': 4, 'comment': 'Bien'}, format='json')
+        self.assertEqual(self.rating(), 4)
+
+    def test_rating_is_recalculated_when_a_review_is_modified(self):
+        Review.objects.create(place=self.place, user=self.alice, rating=5, comment='Super')
+        review = Review.objects.create(place=self.place, user=self.bob, rating=3, comment='Moyen')
+        self.authenticate('bob')
+        response = self.client.patch(f'/api/reviews/{review.id}/', {'rating': 1}, format='json')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(self.rating(), 3)
+
+    def test_rating_is_recalculated_when_a_review_is_deleted_and_reset_without_reviews(self):
+        Review.objects.create(place=self.place, user=self.alice, rating=5, comment='Super')
+        review = Review.objects.create(place=self.place, user=self.bob, rating=1, comment='Déçu')
+        self.assertEqual(self.rating(), 3)
+        self.authenticate('bob')
+        self.assertEqual(self.client.delete(f'/api/reviews/{review.id}/').status_code, status.HTTP_204_NO_CONTENT)
+        self.assertEqual(self.rating(), 5)
+        Review.objects.filter(place=self.place).delete()
+        self.assertEqual(self.rating(), 0)
+
+
+# ============================================
+# TESTS: Recherche de lieux
+# ============================================
+class PlaceSearchTests(BaseAPITestCase):
+    def setUp(self):
+        super().setUp()
+        make_place(self.alice, name='Maquis cher', budget_min=20000, budget_max=40000, rating=4.5)
+        make_place(self.alice, name='Maquis pas cher', budget_min=1000, budget_max=3000, rating=3)
+
+    def search(self, query):
+        return self.client.get(f'/api/places/search/?{query}')
+
+    def test_invalid_numbers_return_400_not_500(self):
+        for query, field in [('budget_min=abc', 'budget_min'), ('budget_max=1e999999', 'budget_max'), ('min_rating=xyz', 'min_rating')]:
+            response = self.search(query)
+            self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST, query)
+            self.assertIn(field, response.data)
+
+    def test_rating_outside_0_to_5_is_rejected(self):
+        self.assertEqual(self.search('min_rating=9').status_code, status.HTTP_400_BAD_REQUEST)
+
+    def test_valid_numbers_still_filter(self):
+        names = [place['name'] for place in self.search('budget_max=5000').data['results']]
+        self.assertEqual(names, ['Maquis pas cher'])
+        names = [place['name'] for place in self.search('min_rating=4').data['results']]
+        self.assertEqual(names, ['Maquis cher'])
+
+
+# ============================================
+# TESTS: Profil
+# ============================================
+class ProfileTests(BaseAPITestCase):
+    def test_cannot_take_another_users_email(self):
+        # L'email sert à retrouver un compte (mot de passe oublié) : il doit rester unique
+        self.authenticate('alice')
+        response = self.client.patch(f'/api/users/{self.alice.id}/', {'email': 'BOB@example.com'}, format='json')
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('email', response.data)
+        self.alice.refresh_from_db()
+        self.assertEqual(self.alice.email, 'alice@example.com')
+
+    def test_can_keep_or_recase_own_email_and_it_is_stored_lowercase(self):
+        self.authenticate('alice')
+        response = self.client.patch(f'/api/users/{self.alice.id}/', {'email': 'Alice@Example.com', 'first_name': 'Alice'}, format='json')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.alice.refresh_from_db()
+        self.assertEqual(self.alice.email, 'alice@example.com')
+        self.assertEqual(self.alice.first_name, 'Alice')
 
 
 # ============================================
