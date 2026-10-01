@@ -11,10 +11,10 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.views import TokenRefreshView
 from rest_framework.pagination import PageNumberPagination
 from django.contrib.auth.models import User
-from django.db.models import Q, Avg
+from django.db.models import Q
 from drf_spectacular.utils import extend_schema_view, extend_schema
 from .models import Place, Review, Favorite, Category, Visit
-from .serializers import PlaceSerializer, ReviewSerializer, FavoriteSerializer, UserSerializer, CategorySerializer, VisitSerializer, RegisterSerializer, LoginSerializer, LogoutSerializer, AuthResponseSerializer
+from .serializers import PlaceSerializer, ReviewSerializer, FavoriteSerializer, UserSerializer, CategorySerializer, VisitSerializer, RegisterSerializer, LoginSerializer, LogoutSerializer, AuthResponseSerializer, PlaceSearchParamsSerializer
 from .permissions import IsAdminOrReadOnly, IsOwnerOrReadOnly
 
 
@@ -256,7 +256,7 @@ class UserViewSet(viewsets.ModelViewSet):
     add_review=extend_schema(tags=["Places"]),
     reviews=extend_schema(tags=["Places"]),
     favorite=extend_schema(tags=["Places"]),
-    search=extend_schema(tags=["Places"]),
+    search=extend_schema(tags=["Places"], parameters=[PlaceSearchParamsSerializer]),
 )
 class PlaceViewSet(viewsets.ModelViewSet):
     """
@@ -309,7 +309,7 @@ class PlaceViewSet(viewsets.ModelViewSet):
         Usage: POST /api/places/{id}/add_review/ 
         Données requis: {"rating": 5, "comment": "Excellent lieu!"}
         
-        Met à jour automatiquement la note moyenne de la place.
+        La note moyenne du lieu est mise à jour automatiquement.
         """
         place = self.get_object()
         
@@ -327,11 +327,7 @@ class PlaceViewSet(viewsets.ModelViewSet):
             }
         )
         
-        # Recalcule la note moyenne de la place
-        avg_rating = Review.objects.filter(place=place).aggregate(Avg('rating'))['rating__avg']
-        if avg_rating:
-            place.rating = round(avg_rating, 2)
-            place.save(update_fields=['rating'])
+        # La note moyenne du lieu est recalculée automatiquement (signal sur Review, voir signals.py)
         
         # Retourne l'avis créé/modifié
         serializer = ReviewSerializer(review, context={'request': request})
@@ -398,19 +394,24 @@ class PlaceViewSet(viewsets.ModelViewSet):
         Exemple: /api/places/search/?search=restaurant&city=Paris&budget_max=50000&min_rating=4
         """
         queryset = self.get_queryset()
+
+        # Paramètres vérifiés d'abord : une valeur invalide renvoie 400, jamais 500
+        params = PlaceSearchParamsSerializer(data=request.query_params)
+        params.is_valid(raise_exception=True)
+        filters = params.validated_data
         
         # Filtre par budget minimum
-        budget_min = request.query_params.get('budget_min')
-        if budget_min:
+        budget_min = filters.get('budget_min')
+        if budget_min is not None:
             queryset = queryset.filter(budget_min__gte=budget_min)
         
         # Filtre par budget maximum
-        budget_max = request.query_params.get('budget_max')
-        if budget_max:
+        budget_max = filters.get('budget_max')
+        if budget_max is not None:
             queryset = queryset.filter(budget_max__lte=budget_max)
         
         # Recherche par texte (dans nom, ville, adresse, description)
-        search_query = request.query_params.get('search')
+        search_query = filters.get('search')
         if search_query:
             queryset = queryset.filter(
                 Q(name__icontains=search_query) |
@@ -420,17 +421,17 @@ class PlaceViewSet(viewsets.ModelViewSet):
             )
         
         # Filtre par catégorie
-        category = request.query_params.get('category')
+        category = filters.get('category')
         if category:
             queryset = queryset.filter(category=category)
         
         # Filtre par note minimale
-        min_rating = request.query_params.get('min_rating')
-        if min_rating:
+        min_rating = filters.get('min_rating')
+        if min_rating is not None:
             queryset = queryset.filter(rating__gte=min_rating)
         
         # Filtre par ville
-        city = request.query_params.get('city')
+        city = filters.get('city')
         if city:
             queryset = queryset.filter(city__icontains=city)
         
