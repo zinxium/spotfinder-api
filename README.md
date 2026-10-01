@@ -151,14 +151,14 @@ Tous les chemins sont préfixés par `/api/`. Le détail des paramètres et des 
 | Ressource | Chemin | Lecture | Écriture |
 |---|---|---|---|
 | Lieux | `places/` | public | connecté (création), propriétaire (modification) |
-| Recherche | `places/search/?search=&city=&category=&budget_min=&budget_max=&min_rating=` | public | — |
+| Recherche | `places/search/?search=&city=&category=&budget_min=&budget_max=&min_rating=&lat=&lng=&radius_km=` | public | — |
 | Avis d'un lieu | `places/{id}/reviews/`, `places/{id}/add_review/` | public | connecté |
 | Favori d'un lieu | `places/{id}/favorite/` (POST / DELETE) | — | connecté |
 | Avis | `reviews/?place_id=` | public | connecté (création), auteur (modification) |
 | Catégories | `categories/` | public | admin |
 | Favoris | `favorites/`, `favorites/toggle/` | propriétaire | propriétaire |
 | Visites | `visits/?place_id=` | propriétaire | propriétaire |
-| Profil | `users/`, `users/{id}/places/` | soi-même (admin : tous) | soi-même |
+| Profil | `users/`, `users/{id}/places/`, `users/me/stats/` | soi-même (admin : tous) | soi-même |
 
 Les listes sont paginées : `?page=2&page_size=20` (100 maximum).
 
@@ -167,6 +167,10 @@ Précisions :
 - **Photo d'un lieu** : champ `image`, envoyé en `multipart/form-data` à la création ou à la modification. Le fichier doit être une vraie image (vérifiée par Pillow) de 5 Mo au plus ; la réponse renvoie son URL complète (`null` sans photo).
 - **Note d'un lieu** (`rating`) : moyenne des avis, recalculée automatiquement à chaque création, modification ou suppression d'avis, par n'importe quel chemin (0 sans avis). En lecture seule.
 - **Recherche** : `budget_min` et `budget_max` sont des nombres positifs, `min_rating` un nombre de 0 à 5. Une valeur invalide renvoie une erreur 400 rattachée au paramètre.
+- **Recherche par texte** (`search`) : accents et majuscules ignorés (« benin » trouve « Bénin »), dans le nom, la ville, l'adresse et la description ; chaque mot doit apparaître. Les lieux gardent pour cela un champ interne `search_text`, jamais renvoyé.
+- **Recherche autour d'une position** : `lat` et `lng` (ensemble) trient du plus proche au plus loin et remplissent `distance_km` dans chaque lieu (`null` sans position) ; `radius_km` (0,1 à 200) ne garde que les lieux dans ce rayon. Distance à vol d'oiseau, calculée par la base de données (pagination exacte).
+- **Visites** : `visited_at` est la date choisie par l'utilisateur (maintenant si elle n'est pas envoyée), modifiable, jamais dans le futur (5 minutes de tolérance pour l'horloge du téléphone). Chaque visite inclut `place_details`, le lieu complet.
+- **Statistiques du profil** : `GET users/me/stats/` renvoie `visits`, `favorites`, `places_added` et `reviews` en un seul appel.
 - **Profil** : l'email reste unique (sans tenir compte de la casse) et il est enregistré en minuscules.
 
 ## Droits d'accès
