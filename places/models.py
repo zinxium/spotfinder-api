@@ -1,6 +1,7 @@
 import hashlib
 import hmac
 import secrets
+import unicodedata
 from datetime import timedelta
 
 from django.conf import settings
@@ -32,6 +33,18 @@ class Category(models.Model):
         # Trier les catégories par nom
         ordering = ['name']
         verbose_name_plural = 'Categories'
+
+
+def normalize_search_text(value):
+    """
+    Texte comparable pour la recherche : sans accents, en minuscules, espaces réduits.
+    « Bénin », « BENIN » et « benin » donnent tous « benin » ; « Œuf » donne « oeuf ».
+    Appliquée aux lieux (champ search_text) comme aux recherches : les deux côtés se comparent.
+    """
+    decomposed = unicodedata.normalize('NFKD', value or '')
+    without_accents = ''.join(char for char in decomposed if not unicodedata.combining(char))
+    folded = without_accents.casefold().replace('œ', 'oe').replace('æ', 'ae')
+    return ' '.join(folded.split())
 
 
 # ============================================
@@ -99,9 +112,30 @@ class Place(models.Model):
     # Date de modification automatique (mise à jour à chaque modification)
     updated_at = models.DateTimeField(auto_now=True)
 
+    # Nom, ville, adresse et description sans accents ni majuscules (voir normalize_search_text).
+    # Rempli à chaque enregistrement ; sert à la recherche, jamais renvoyé par l'API.
+    search_text = models.TextField(blank=True, editable=False)
+
     def __str__(self):
         """Affiche le nom de la place"""
         return self.name
+
+    def build_search_text(self):
+        """
+        Champs cherchables, normalisés et séparés par « | » : une recherche ne peut pas
+        trouver un mot à cheval sur deux champs.
+        """
+        return ' | '.join(
+            normalize_search_text(part) for part in (self.name, self.city, self.address, self.description)
+        )
+
+    def save(self, *args, **kwargs):
+        """Recalcule search_text à chaque enregistrement (et l'ajoute à update_fields si besoin)"""
+        self.search_text = self.build_search_text()
+        update_fields = kwargs.get('update_fields')
+        if update_fields is not None and {'name', 'city', 'address', 'description'} & set(update_fields):
+            kwargs['update_fields'] = set(update_fields) | {'search_text'}
+        super().save(*args, **kwargs)
 
     @classmethod
     def refresh_rating(cls, place_id):
@@ -213,7 +247,8 @@ class Visit(models.Model):
     place = models.ForeignKey(Place, on_delete=models.CASCADE, related_name='visits')
     
     # Date et heure de la visite
-    visited_at = models.DateTimeField(auto_now_add=True)
+    # Choisie par l'utilisateur (calendrier de l'app), maintenant par défaut
+    visited_at = models.DateTimeField(default=timezone.now)
     
     # Durée de la visite en minutes (optionnel)
     duration_minutes = models.PositiveIntegerField(null=True, blank=True)
