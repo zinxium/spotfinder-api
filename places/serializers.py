@@ -1,3 +1,4 @@
+from datetime import timedelta
 from decimal import Decimal
 
 from rest_framework import serializers
@@ -5,10 +6,17 @@ from django.contrib.auth import authenticate
 from django.contrib.auth.models import User
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError as DjangoValidationError
+from django.utils import timezone
 from .models import Place, Review, Favorite, Category, Visit
 
 # Poids maximal d'une photo de lieu : assez pour une photo de téléphone compressée par l'app
 PLACE_IMAGE_MAX_BYTES = 5 * 1024 * 1024
+
+# Rayon maximal d'une recherche autour d'une position (km)
+MAX_SEARCH_RADIUS_KM = 200
+
+# Tolérance pour une date de visite « dans le futur » : décalage d'horloge du téléphone
+VISIT_CLOCK_TOLERANCE = timedelta(minutes=5)
 
 # ============================================
 # SERIALIZER: Category
@@ -102,11 +110,14 @@ class PlaceSerializer(serializers.ModelSerializer):
     
     # Booléen indiquant si l'utilisateur actuel a mis en favori cette place
     is_favorite = serializers.SerializerMethodField()
-    
+
+    # Distance en km depuis la position envoyée à la recherche (lat, lng) ; null sinon
+    distance_km = serializers.SerializerMethodField()
+
     class Meta:
         model = Place
-        # Affiche tous les champs du modèle
-        fields = '__all__'
+        # Tous les champs du modèle, sauf le texte de recherche interne
+        exclude = ('search_text',)
         # Le propriétaire est défini par le serveur, la note est calculée à partir des avis
         read_only_fields = ('owner', 'rating', 'created_at', 'updated_at')
 
@@ -133,6 +144,11 @@ class PlaceSerializer(serializers.ModelSerializer):
         """Compte le nombre de fois que cette place a été mise en favori"""
         return obj.favorited_by.count()
     
+    def get_distance_km(self, obj) -> float | None:
+        """Distance calculée par la recherche autour d'une position, arrondie à 10 m"""
+        distance = getattr(obj, 'distance_km', None)
+        return round(distance, 2) if distance is not None else None
+
     def get_is_favorite(self, obj) -> bool:
         """Vérifie si l'utilisateur actuel a mis en favori cette place"""
         request = self.context.get('request')
@@ -159,6 +175,20 @@ class PlaceSearchParamsSerializer(serializers.Serializer):
     budget_min = serializers.DecimalField(required=False, max_digits=10, decimal_places=2, min_value=Decimal('0'))
     budget_max = serializers.DecimalField(required=False, max_digits=10, decimal_places=2, min_value=Decimal('0'))
     min_rating = serializers.FloatField(required=False, min_value=0, max_value=5)
+    # Position de l'utilisateur : résultats triés du plus proche au plus loin, avec distance_km
+    lat = serializers.FloatField(required=False, min_value=-90, max_value=90)
+    lng = serializers.FloatField(required=False, min_value=-180, max_value=180)
+    # Rayon autour de la position, en km (nécessite lat et lng)
+    radius_km = serializers.FloatField(required=False, min_value=0.1, max_value=MAX_SEARCH_RADIUS_KM)
+
+    def validate(self, attrs):
+        """La position s'envoie complète (lat et lng) ; un rayon n'a de sens qu'avec une position"""
+        has_lat, has_lng = 'lat' in attrs, 'lng' in attrs
+        if has_lat != has_lng:
+            raise serializers.ValidationError({'lng' if has_lat else 'lat': 'Envoyez lat et lng ensemble.'})
+        if 'radius_km' in attrs and not has_lat:
+            raise serializers.ValidationError({'radius_km': 'Le rayon nécessite une position (lat et lng).'})
+        return attrs
 
 
 # ============================================
@@ -200,11 +230,22 @@ class VisitSerializer(serializers.ModelSerializer):
     
     # Affiche la ville de la place
     place_city = serializers.CharField(source='place.city', read_only=True)
-    
+
+    # Détail complet du lieu (photo, note...), comme pour les favoris : l'historique l'affiche sans autre requête
+    place_details = PlaceSerializer(source='place', read_only=True)
+
     class Meta:
         model = Visit
-        fields = ('id', 'place', 'place_name', 'place_address', 'place_city', 'visited_at', 'duration_minutes', 'personal_note')
-        read_only_fields = ('id', 'visited_at')
+        fields = ('id', 'place', 'place_name', 'place_address', 'place_city', 'place_details', 'visited_at', 'duration_minutes', 'personal_note')
+        read_only_fields = ('id',)
+        # Date choisie dans le calendrier de l'app ; maintenant si elle n'est pas envoyée
+        extra_kwargs = {'visited_at': {'required': False}}
+
+    def validate_visited_at(self, value):
+        """Une visite ne peut pas être dans le futur (à quelques minutes près)"""
+        if value > timezone.now() + VISIT_CLOCK_TOLERANCE:
+            raise serializers.ValidationError('La date de visite ne peut pas être dans le futur.')
+        return value
 
 
 # ============================================
@@ -358,3 +399,11 @@ class AccountDeleteSerializer(serializers.Serializer):
 class DetailSerializer(serializers.Serializer):
     """Réponse contenant seulement un message"""
     detail = serializers.CharField(read_only=True)
+
+
+class ProfileStatsSerializer(serializers.Serializer):
+    """Compteurs du profil, en un seul appel"""
+    visits = serializers.IntegerField(read_only=True)
+    favorites = serializers.IntegerField(read_only=True)
+    places_added = serializers.IntegerField(read_only=True)
+    reviews = serializers.IntegerField(read_only=True)

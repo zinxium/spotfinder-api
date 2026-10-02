@@ -15,15 +15,17 @@ from django.contrib.auth.models import User
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import transaction
-from django.db.models import Q
+from django.db.models import F, Q
+from django.db.models.functions import ASin, Cos, Power, Radians, Sin, Sqrt
+import math
 from django.utils import timezone
 import hashlib
 from drf_spectacular.utils import extend_schema_view, extend_schema
 from .emails import send_account_deleted, send_password_changed, send_reset_code
-from .models import Place, Review, Favorite, Category, Visit, PasswordResetCode
+from .models import Place, Review, Favorite, Category, Visit, PasswordResetCode, normalize_search_text
 from .serializers import PlaceSerializer, ReviewSerializer, FavoriteSerializer, UserSerializer, CategorySerializer, VisitSerializer, RegisterSerializer, LoginSerializer, LogoutSerializer, AuthResponseSerializer, PlaceSearchParamsSerializer
 from .serializers import (
-    AccountDeleteSerializer, DetailSerializer, PasswordChangeSerializer, PasswordResetConfirmSerializer,
+    AccountDeleteSerializer, DetailSerializer, PasswordChangeSerializer, PasswordResetConfirmSerializer, ProfileStatsSerializer,
     PasswordResetRequestSerializer, PasswordResetTokenSerializer, PasswordResetVerifySerializer, TokenPairSerializer,
 )
 from .permissions import IsAdminOrReadOnly, IsOwnerOrReadOnly
@@ -45,6 +47,37 @@ class StandardResultsSetPagination(PageNumberPagination):
     
     # Nombre maximum de résultats autorisés par page
     max_page_size = 100
+
+
+# ============================================
+# DISTANCE (recherche autour d'une position)
+# ============================================
+EARTH_RADIUS_KM = 6371
+
+
+def annotate_distance(queryset, lat, lng):
+    """
+    Ajoute distance_km (formule de haversine), calculée par la base de données :
+    le tri par distance et la pagination restent exacts, même sur des milliers de lieux.
+    """
+    lat_rad, lng_rad = math.radians(lat), math.radians(lng)
+    half_dlat = (Radians(F('latitude')) - lat_rad) / 2
+    half_dlng = (Radians(F('longitude')) - lng_rad) / 2
+    a = Power(Sin(half_dlat), 2) + math.cos(lat_rad) * Cos(Radians(F('latitude'))) * Power(Sin(half_dlng), 2)
+    return queryset.annotate(distance_km=2 * EARTH_RADIUS_KM * ASin(Sqrt(a)))
+
+
+def within_bounding_box(queryset, lat, lng, radius_km):
+    """
+    Préfiltre simple (rectangle autour du cercle) avant le calcul exact :
+    écarte vite les lieux lointains. 1 degré de latitude vaut environ 111 km.
+    """
+    dlat = radius_km / 111.0
+    dlng = radius_km / (111.0 * max(math.cos(math.radians(lat)), 0.01))
+    return queryset.filter(
+        latitude__range=(lat - dlat, lat + dlat),
+        longitude__range=(lng - dlng, lng + dlng),
+    )
 
 
 # ============================================
@@ -203,6 +236,11 @@ class FavoriteViewSet(viewsets.ModelViewSet):
     partial_update=extend_schema(tags=["Users"]),
     destroy=extend_schema(tags=["Users"], description="Réservé aux administrateurs. Pour supprimer son propre compte : DELETE /api/users/me/."),
     places=extend_schema(tags=["Users"]),
+    stats=extend_schema(
+        tags=["Users"],
+        description="Compteurs du profil de l'utilisateur connecté : visites, favoris, lieux ajoutés, avis.",
+        responses={200: ProfileStatsSerializer, 401: {}},
+    ),
     me=extend_schema(
         tags=["Users"],
         description=(
@@ -267,6 +305,22 @@ class UserViewSet(viewsets.ModelViewSet):
         """Avant la suppression, révoque les sessions : un refresh token ne doit pas survivre au compte"""
         revoke_all_sessions(instance)
         instance.delete()
+
+    @action(detail=False, methods=['get'], url_path='me/stats')
+    def stats(self, request):
+        """
+        Compteurs du profil de l'utilisateur connecté, en un seul appel.
+
+        Usage: GET /api/users/me/stats/
+        Retour: {"visits": 12, "favorites": 5, "places_added": 3, "reviews": 7}
+        """
+        user = request.user
+        return Response({
+            'visits': user.visits.count(),
+            'favorites': user.favorites.count(),
+            'places_added': user.places.count(),
+            'reviews': user.reviews.count(),
+        })
 
     @action(detail=False, methods=['delete'])
     def me(self, request):
@@ -444,12 +498,14 @@ class PlaceViewSet(viewsets.ModelViewSet):
         Action de recherche avancée pour filtrer les places.
         
         Paramètres supportés:
-        - search: Recherche par nom, ville, adresse ou description
+        - search: Recherche par nom, ville, adresse ou description (accents et majuscules ignorés)
         - budget_min: Budget minimum
         - budget_max: Budget maximum
         - category: Catégorie (restaurant, hôtel, etc.)
         - min_rating: Note minimale
         - city: Nom de la ville
+        - lat, lng: Position de l'utilisateur (tri du plus proche au plus loin, champ distance_km)
+        - radius_km: Rayon autour de la position, en km (200 au plus)
         - page: Numéro de page (défaut: 1)
         - page_size: Nombre de résultats par page (max: 100)
         
@@ -472,15 +528,11 @@ class PlaceViewSet(viewsets.ModelViewSet):
         if budget_max is not None:
             queryset = queryset.filter(budget_max__lte=budget_max)
         
-        # Recherche par texte (dans nom, ville, adresse, description)
-        search_query = filters.get('search')
-        if search_query:
-            queryset = queryset.filter(
-                Q(name__icontains=search_query) |
-                Q(city__icontains=search_query) |
-                Q(address__icontains=search_query) |
-                Q(description__icontains=search_query)
-            )
+        # Recherche par texte (nom, ville, adresse, description), sans tenir compte des accents
+        # ni des majuscules : « benin » trouve « Bénin ». Chaque mot doit apparaître.
+        search_query = normalize_search_text(filters.get('search'))
+        for word in search_query.split():
+            queryset = queryset.filter(search_text__contains=word)
         
         # Filtre par catégorie
         category = filters.get('category')
@@ -496,7 +548,18 @@ class PlaceViewSet(viewsets.ModelViewSet):
         city = filters.get('city')
         if city:
             queryset = queryset.filter(city__icontains=city)
-        
+
+        # Autour d'une position : distance calculée, rayon éventuel, du plus proche au plus loin
+        lat, lng = filters.get('lat'), filters.get('lng')
+        if lat is not None and lng is not None:
+            radius_km = filters.get('radius_km')
+            if radius_km is not None:
+                queryset = within_bounding_box(queryset, lat, lng, radius_km)
+            queryset = annotate_distance(queryset, lat, lng)
+            if radius_km is not None:
+                queryset = queryset.filter(distance_km__lte=radius_km)
+            queryset = queryset.order_by('distance_km', '-created_at')
+
         # Applique la pagination
         page = self.paginate_queryset(queryset)
         if page is not None:

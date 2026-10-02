@@ -8,6 +8,10 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/). Versions : [S
 
 ### Ajouté
 - Commande `python manage.py seed_demo` : compte `demo` (mot de passe généré et affiché une fois, ou `--password`), 8 lieux et 6 avis de démonstration ; refusée si `DEBUG=False`, sans doublons si relancée (5 tests)
+- **Recherche sans accents** : `search` ignore accents et majuscules (« benin » trouve « Bénin »), chaque mot devant apparaître dans le nom, la ville, l'adresse ou la description. Champ interne `search_text` (non renvoyé), recalculé à chaque enregistrement ; migration `0007` qui le remplit pour les lieux existants. Fonctionne sur PostgreSQL comme sur SQLite (4 tests)
+- **Recherche autour d'une position** : paramètres `lat`, `lng` et `radius_km` sur `/api/places/search/`, tri du plus proche au plus loin, champ `distance_km` dans chaque lieu. Distance calculée par la base (haversine), précédée d'un préfiltre rectangulaire (4 tests)
+- **Statistiques du profil** : `GET /api/users/me/stats/` (visites, favoris, lieux ajoutés, avis) en un seul appel, au lieu de trois (2 tests)
+- Visites : `place_details`, le lieu complet (photo, note), comme pour les favoris
 - **Changement de mot de passe** : `POST /api/auth/password/change/` (`current_password`, `new_password`). Toutes les sessions sont révoquées ; la réponse contient de nouveaux tokens pour rester connecté sur cet appareil ; email d'alerte (4 tests)
 - **Mot de passe oublié** en 3 étapes : `POST /api/auth/password/reset/` (code à 6 chiffres par email), `.../verify/` (jeton à usage unique), `.../confirm/` (nouveau mot de passe, sessions révoquées, email d'alerte). Même réponse que l'email soit inscrit ou non ; code et jeton stockés en empreinte HMAC, valables 10 minutes, 5 essais par code ; limites par IP et par email (10 tests)
 - **Suppression du compte** : `DELETE /api/users/me/` avec le mot de passe. Supprime avis (notes recalculées), favoris, visites et sessions ; email de confirmation (4 tests)
@@ -22,6 +26,7 @@ Format : [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/). Versions : [S
 - Messages d'erreur en **français** par défaut (`LANGUAGE_CODE=fr`) : validation Django et DRF, et la plupart des messages JWT (quelques-uns restent en anglais, faute de traduction dans simplejwt)
 
 ### Corrigé
+- **Date des visites** : `visited_at` était fixé à la date d'enregistrement et la date choisie dans l'app était ignorée (visite du 27 enregistrée au 30). La date envoyée est conservée (maintenant par défaut), modifiable, et refusée si elle est dans le futur ; migration `0007` (4 tests)
 - **Photo d'un lieu** : le champ `image` était en lecture seule, une photo envoyée à la création était ignorée sans erreur. Il accepte maintenant un envoi `multipart/form-data` ; le fichier doit être une vraie image (Pillow) de 5 Mo au plus. La réponse garde une URL complète (4 tests)
 - **Note d'un lieu** : modifier ou supprimer un avis par `/api/reviews/` (ou par l'admin, ou en supprimant un compte) ne recalculait pas la note, et un lieu sans avis gardait sa dernière note. Calcul centralisé (`Place.refresh_rating`), déclenché par un signal à chaque changement d'avis ; migration `0005` qui recalcule une fois toutes les notes existantes (3 tests)
 - **Profil** : `PATCH /api/users/{id}/` acceptait l'email d'un autre compte. L'email reste unique sans tenir compte de la casse, comme à l'inscription, et il est enregistré en minuscules (2 tests)

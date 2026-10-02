@@ -16,7 +16,7 @@ from rest_framework import status
 from PIL import Image
 from rest_framework.test import APITestCase
 
-from .models import Category, PasswordResetCode, Place, Review
+from .models import Category, Favorite, PasswordResetCode, Place, Review, Visit, normalize_search_text
 from .views import AuthRateThrottle
 
 
@@ -580,6 +580,147 @@ class AccountDeletionTests(BaseAPITestCase):
         response = self.client.delete(f'/api/users/{self.alice.id}/')
         self.assertEqual(response.status_code, status.HTTP_405_METHOD_NOT_ALLOWED)
         self.assertTrue(User.objects.filter(pk=self.alice.pk).exists())
+
+
+# ============================================
+# TESTS: Recherche sans accents
+# ============================================
+class SearchWithoutAccentsTests(BaseAPITestCase):
+    def setUp(self):
+        super().setUp()
+        make_place(self.alice, name='Saveurs du Bénin', city='Cotonou', description='Cuisine épicée')
+        make_place(self.alice, name='Hôtel du Lac', city='Grand-Popo', category='hotel')
+
+    def names(self, query):
+        response = self.client.get('/api/places/search/', {'search': query})
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        return [place['name'] for place in response.data['results']]
+
+    def test_normalization(self):
+        self.assertEqual(normalize_search_text('  Œuf  ÉPICÉ  '), 'oeuf epice')
+
+    def test_accents_and_case_are_ignored_both_ways(self):
+        for query in ('benin', 'BÉNIN', 'Benin', 'epicee'):
+            self.assertEqual(self.names(query), ['Saveurs du Bénin'], query)
+        self.assertEqual(self.names('hotel'), ['Hôtel du Lac'])
+
+    def test_every_word_must_match_in_any_field(self):
+        self.assertEqual(self.names('saveurs cotonou'), ['Saveurs du Bénin'])
+        self.assertEqual(self.names('saveurs popo'), [])
+
+    def test_search_text_follows_edits_and_is_not_exposed(self):
+        place = Place.objects.get(name='Hôtel du Lac')
+        self.authenticate()
+        response = self.client.patch(f'/api/places/{place.id}/', {'name': 'Auberge Étoile'}, format='json')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertNotIn('search_text', response.data)
+        self.assertEqual(self.names('etoile'), ['Auberge Étoile'])
+        self.assertEqual(self.names('hotel'), [])
+
+
+# ============================================
+# TESTS: Recherche autour d'une position
+# ============================================
+COTONOU = (6.3654, 2.4183)
+
+
+class SearchByDistanceTests(BaseAPITestCase):
+    def setUp(self):
+        super().setUp()
+        make_place(self.alice, name='Parakou', latitude=9.3372, longitude=2.6303)
+        make_place(self.alice, name='Calavi', latitude=6.4485, longitude=2.3557)
+        make_place(self.alice, name='Cotonou centre', latitude=6.3660, longitude=2.4190)
+
+    def search(self, **params):
+        return self.client.get('/api/places/search/', params)
+
+    def test_sorted_from_nearest_with_distance(self):
+        results = self.search(lat=COTONOU[0], lng=COTONOU[1]).data['results']
+        self.assertEqual([place['name'] for place in results], ['Cotonou centre', 'Calavi', 'Parakou'])
+        self.assertLess(results[0]['distance_km'], 0.2)
+        # Cotonou - Abomey-Calavi : environ 11,5 km à vol d'oiseau
+        self.assertAlmostEqual(results[1]['distance_km'], 11.5, delta=0.5)
+
+    def test_radius_keeps_only_nearby_places(self):
+        names = [place['name'] for place in self.search(lat=COTONOU[0], lng=COTONOU[1], radius_km=5).data['results']]
+        self.assertEqual(names, ['Cotonou centre'])
+        names = [place['name'] for place in self.search(lat=COTONOU[0], lng=COTONOU[1], radius_km=50).data['results']]
+        self.assertEqual(names, ['Cotonou centre', 'Calavi'])
+
+    def test_distance_is_null_without_position(self):
+        results = self.search().data['results']
+        self.assertTrue(all(place['distance_km'] is None for place in results))
+
+    def test_invalid_position_parameters_return_400(self):
+        for params, field in [
+            ({'lat': COTONOU[0]}, 'lng'),
+            ({'lng': COTONOU[1]}, 'lat'),
+            ({'radius_km': 5}, 'radius_km'),
+            ({'lat': 120, 'lng': 2}, 'lat'),
+            ({'lat': COTONOU[0], 'lng': COTONOU[1], 'radius_km': 5000}, 'radius_km'),
+        ]:
+            response = self.search(**params)
+            self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST, params)
+            self.assertIn(field, response.data, params)
+
+
+# ============================================
+# TESTS: Date des visites
+# ============================================
+class VisitDateTests(BaseAPITestCase):
+    def setUp(self):
+        super().setUp()
+        self.place = make_place(self.bob)
+        self.authenticate()
+
+    def create(self, **data):
+        return self.client.post('/api/visits/', {'place': self.place.id, **data}, format='json')
+
+    def test_chosen_date_is_kept(self):
+        response = self.create(visited_at='2026-09-27T12:30:00Z')
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        visit = Visit.objects.get(pk=response.data['id'])
+        self.assertEqual(visit.visited_at.isoformat(), '2026-09-27T12:30:00+00:00')
+
+    def test_date_defaults_to_now(self):
+        before = timezone.now()
+        response = self.create()
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertGreaterEqual(Visit.objects.get(pk=response.data['id']).visited_at, before)
+
+    def test_future_date_is_rejected(self):
+        tomorrow = (timezone.now() + timedelta(days=1)).isoformat()
+        response = self.create(visited_at=tomorrow)
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('visited_at', response.data)
+
+    def test_date_can_be_changed_and_place_details_are_included(self):
+        visit_id = self.create().data['id']
+        response = self.client.patch(f'/api/visits/{visit_id}/', {'visited_at': '2026-09-20T08:00:00Z'}, format='json')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertTrue(response.data['visited_at'].startswith('2026-09-20'))
+        self.assertEqual(response.data['place_details']['name'], self.place.name)
+
+
+# ============================================
+# TESTS: Statistiques du profil
+# ============================================
+class ProfileStatsTests(BaseAPITestCase):
+    def test_requires_authentication(self):
+        self.assertEqual(self.client.get('/api/users/me/stats/').status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_counts_only_the_current_user(self):
+        mine = make_place(self.alice)
+        theirs = make_place(self.bob)
+        Visit.objects.create(user=self.alice, place=theirs)
+        Visit.objects.create(user=self.alice, place=mine)
+        Visit.objects.create(user=self.bob, place=mine)
+        Favorite.objects.create(user=self.alice, place=theirs)
+        Review.objects.create(user=self.alice, place=theirs, rating=4, comment='Bien')
+        self.authenticate()
+        response = self.client.get('/api/users/me/stats/')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data, {'visits': 2, 'favorites': 1, 'places_added': 1, 'reviews': 1})
 
 
 # ============================================

@@ -998,12 +998,14 @@ paths:
         Action de recherche avancée pour filtrer les places.
 
         Paramètres supportés:
-        - search: Recherche par nom, ville, adresse ou description
+        - search: Recherche par nom, ville, adresse ou description (accents et majuscules ignorés)
         - budget_min: Budget minimum
         - budget_max: Budget maximum
         - category: Catégorie (restaurant, hôtel, etc.)
         - min_rating: Note minimale
         - city: Nom de la ville
+        - lat, lng: Position de l'utilisateur (tri du plus proche au plus loin, champ distance_km)
+        - radius_km: Rayon autour de la position, en km (200 au plus)
         - page: Numéro de page (défaut: 1)
         - page_size: Nombre de résultats par page (max: 100)
 
@@ -1030,12 +1032,33 @@ paths:
         schema:
           type: string
       - in: query
+        name: lat
+        schema:
+          type: number
+          format: double
+          maximum: 90
+          minimum: -90
+      - in: query
+        name: lng
+        schema:
+          type: number
+          format: double
+          maximum: 180
+          minimum: -180
+      - in: query
         name: min_rating
         schema:
           type: number
           format: double
           maximum: 5
           minimum: 0
+      - in: query
+        name: radius_km
+        schema:
+          type: number
+          format: double
+          maximum: 200
+          minimum: 0.1
       - in: query
         name: search
         schema:
@@ -1439,6 +1462,24 @@ paths:
           description: No response body
         '400':
           description: No response body
+        '401':
+          description: No response body
+  /api/users/me/stats/:
+    get:
+      operationId: api_users_me_stats_retrieve
+      description: 'Compteurs du profil de l''utilisateur connecté : visites, favoris,
+        lieux ajoutés, avis.'
+      tags:
+      - Users
+      security:
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProfileStats'
+          description: ''
         '401':
           description: No response body
   /api/visits/:
@@ -1995,6 +2036,13 @@ components:
           type: boolean
           description: Vérifie si l'utilisateur actuel a mis en favori cette place
           readOnly: true
+        distance_km:
+          type: number
+          format: double
+          nullable: true
+          description: Distance calculée par la recherche autour d'une position, arrondie
+            à 10 m
+          readOnly: true
         name:
           type: string
           maxLength: 255
@@ -2124,10 +2172,13 @@ components:
         place_city:
           type: string
           readOnly: true
+        place_details:
+          allOf:
+          - $ref: '#/components/schemas/Place'
+          readOnly: true
         visited_at:
           type: string
           format: date-time
-          readOnly: true
         duration_minutes:
           type: integer
           maximum: 9223372036854775807
@@ -2163,6 +2214,13 @@ components:
         is_favorite:
           type: boolean
           description: Vérifie si l'utilisateur actuel a mis en favori cette place
+          readOnly: true
+        distance_km:
+          type: number
+          format: double
+          nullable: true
+          description: Distance calculée par la recherche autour d'une position, arrondie
+            à 10 m
           readOnly: true
         name:
           type: string
@@ -2216,6 +2274,7 @@ components:
       - category
       - city
       - created_at
+      - distance_km
       - favorites_count
       - id
       - is_favorite
@@ -2227,6 +2286,27 @@ components:
       - rating
       - reviews_count
       - updated_at
+    ProfileStats:
+      type: object
+      description: Compteurs du profil, en un seul appel
+      properties:
+        visits:
+          type: integer
+          readOnly: true
+        favorites:
+          type: integer
+          readOnly: true
+        places_added:
+          type: integer
+          readOnly: true
+        reviews:
+          type: integer
+          readOnly: true
+      required:
+      - favorites
+      - places_added
+      - reviews
+      - visits
     RatingEnum:
       enum:
       - 1
@@ -2386,10 +2466,13 @@ components:
         place_city:
           type: string
           readOnly: true
+        place_details:
+          allOf:
+          - $ref: '#/components/schemas/Place'
+          readOnly: true
         visited_at:
           type: string
           format: date-time
-          readOnly: true
         duration_minutes:
           type: integer
           maximum: 9223372036854775807
@@ -2403,8 +2486,8 @@ components:
       - place
       - place_address
       - place_city
+      - place_details
       - place_name
-      - visited_at
   securitySchemes:
     jwtAuth:
       type: http
